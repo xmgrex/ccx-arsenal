@@ -10,20 +10,35 @@
   "plugins": [
     {
       "name": "claude-md-auditor",
-      "source": "claude-md-auditor",
       "description": "Audit CLAUDE.md files for redundancy and adherence to best practices",
+      "version": "1.0.0",
+      "author": {
+        "name": "xmgrex"
+      },
+      "source": "./plugins/claude-md-auditor",
+      "category": "development",
       "keywords": ["claude-md", "audit", "best-practices", "optimization"]
     },
     {
       "name": "pdca-debug-suite",
-      "source": "pdca-debug-suite",
       "description": "PDCA-based debugging toolkit: debug cycle methodology, language-specific log patterns, and mobile MCP tool guides",
+      "version": "1.0.0",
+      "author": {
+        "name": "xmgrex"
+      },
+      "source": "./plugins/pdca-debug-suite",
+      "category": "development",
       "keywords": ["pdca", "debugging", "logging", "mobile", "flutter", "android", "ios", "mcp"]
     },
     {
       "name": "flutter-riverpod-architecture",
-      "source": "flutter-riverpod-architecture",
       "description": "Clean Architecture patterns for Flutter with Riverpod state management",
+      "version": "1.0.0",
+      "author": {
+        "name": "xmgrex"
+      },
+      "source": "./plugins/flutter-riverpod-architecture",
+      "category": "development",
       "keywords": ["flutter", "riverpod", "clean-architecture", "freezed", "go_router"]
     }
   ]
