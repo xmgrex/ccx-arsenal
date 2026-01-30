@@ -1,0 +1,9 @@
+{
+  "name": "claude-md-auditor",
+  "description": "Audit CLAUDE.md files for redundancy and adherence to best practices",
+  "version": "1.0.0",
+  "author": {
+    "name": "ccx-arsenal"
+  },
+  "keywords": ["claude-md", "audit", "best-practices", "optimization"]
+}
