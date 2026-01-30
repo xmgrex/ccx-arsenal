@@ -1,0 +1,8 @@
+{
+  "name": "flutter-riverpod-architecture",
+  "description": "Clean Architecture patterns for Flutter with Riverpod state management",
+  "version": "1.0.0",
+  "author": {
+    "name": "ccx-arsenal"
+  }
+}

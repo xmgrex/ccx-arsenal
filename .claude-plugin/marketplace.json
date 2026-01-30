@@ -19,6 +19,12 @@
       "source": "pdca-debug-suite",
       "description": "PDCA-based debugging toolkit: debug cycle methodology, language-specific log patterns, and mobile MCP tool guides",
       "keywords": ["pdca", "debugging", "logging", "mobile", "flutter", "android", "ios", "mcp"]
+    },
+    {
+      "name": "flutter-riverpod-architecture",
+      "source": "flutter-riverpod-architecture",
+      "description": "Clean Architecture patterns for Flutter with Riverpod state management",
+      "keywords": ["flutter", "riverpod", "clean-architecture", "freezed", "go_router"]
     }
   ]
 }
