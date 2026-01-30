@@ -33,15 +33,22 @@ ccx-arsenal/
 ### マーケットプレイスの登録
 
 ```shell
+/plugin marketplace add xmgrex/ccx-arsenal
+```
+
+ローカル開発時:
+```shell
 /plugin marketplace add /path/to/ccx-arsenal
-# または GitHub経由
-/plugin marketplace add owner/ccx-arsenal
 ```
 
 ### プラグインのインストール
 
 ```shell
-/plugin install {member_name}@ccx-arsenal
+# 利用可能なプラグインを確認
+/plugin search @ccx-arsenal
+
+# プラグインをインストール
+/plugin install {plugin_name}@ccx-arsenal
 ```
 
 ### メンバーとしてプラグインを追加する

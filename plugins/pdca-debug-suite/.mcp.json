@@ -1,0 +1,12 @@
+{
+  "dart": {
+    "command": "dart",
+    "args": ["mcp-server"],
+    "env": {}
+  },
+  "mobile": {
+    "command": "npx",
+    "args": ["-y", "@mobilenext/mobile-mcp@latest"],
+    "env": {}
+  }
+}
