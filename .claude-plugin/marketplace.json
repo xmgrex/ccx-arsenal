@@ -40,6 +40,17 @@
       "source": "./plugins/flutter-riverpod-architecture",
       "category": "development",
       "keywords": ["flutter", "riverpod", "clean-architecture", "freezed", "go_router"]
+    },
+    {
+      "name": "agent-core",
+      "description": "Essential skills for mastering AI agent collaboration. Includes intent clarification, delegation decisions, and skill activation patterns.",
+      "version": "1.0.0",
+      "author": {
+        "name": "xmgrex"
+      },
+      "source": "./plugins/agent-core",
+      "category": "productivity",
+      "keywords": ["agent", "delegation", "intent", "skills", "orchestration", "meta"]
     }
   ]
 }
