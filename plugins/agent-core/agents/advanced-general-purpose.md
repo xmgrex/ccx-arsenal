@@ -1,6 +1,6 @@
 ---
 name: advanced-general-purpose
-description: A general-purpose sub-agent utilizing Opus 4.5. Ideal for complex reasoning, deep analysis, and multi-step tasks. Use as a superior alternative to general-purpose agents.
+description: A general-purpose sub-agent utilizing Opus model. Ideal for complex reasoning, deep analysis, and multi-step tasks. Use as a superior alternative to general-purpose agents.
 model: opus
 tools: *
 ---
