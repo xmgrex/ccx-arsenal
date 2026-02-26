@@ -1,0 +1,17 @@
+{
+  "description": "Check Flutter Riverpod clean architecture compliance after file modifications",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/check-architecture.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
