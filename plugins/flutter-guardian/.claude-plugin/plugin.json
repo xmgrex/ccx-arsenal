@@ -1,0 +1,9 @@
+{
+  "name": "flutter-guardian",
+  "description": "Flutter project guardrails: pre-commit dart analyze, enn design system nudges, and Riverpod layer checks",
+  "version": "1.0.0",
+  "author": {
+    "name": "kyouyagenki"
+  },
+  "keywords": ["flutter", "dart", "lint", "enn", "hooks", "guardian"]
+}
