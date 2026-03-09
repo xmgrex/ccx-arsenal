@@ -51,6 +51,28 @@
       "source": "./plugins/agent-core",
       "category": "productivity",
       "keywords": ["agent", "delegation", "intent", "skills", "orchestration", "meta"]
+    },
+    {
+      "name": "flutter-guardian",
+      "description": "Flutter project guardrails: pre-commit dart analyze, enn design system nudges, and convention checks",
+      "version": "1.0.0",
+      "author": {
+        "name": "kyouyagenki"
+      },
+      "source": "./plugins/flutter-guardian",
+      "category": "development",
+      "keywords": ["flutter", "dart", "lint", "enn", "hooks", "guardian"]
+    },
+    {
+      "name": "swift-guardian",
+      "description": "Swift/SwiftUI project guardrails: pre-commit build check, SwiftUI-first convention, iOS version guard",
+      "version": "1.0.0",
+      "author": {
+        "name": "kyouyagenki"
+      },
+      "source": "./plugins/swift-guardian",
+      "category": "development",
+      "keywords": ["swift", "swiftui", "xcode", "ios", "hooks", "guardian"]
     }
   ]
 }

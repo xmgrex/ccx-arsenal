@@ -1,0 +1,9 @@
+{
+  "name": "swift-guardian",
+  "description": "Swift/SwiftUI project guardrails with bundled skills: pre-commit build check, SwiftUI-first convention, iOS version guard, SwiftUI animation expertise, and SwiftUI best practices",
+  "version": "1.1.0",
+  "author": {
+    "name": "kyouyagenki"
+  },
+  "keywords": ["swift", "swiftui", "xcode", "ios", "hooks", "guardian", "animation", "expert", "best-practices"]
+}
