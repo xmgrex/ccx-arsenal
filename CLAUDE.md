@@ -2,6 +2,14 @@
 
 このファイルはClaude Codeへの指示書です。マーケットプレイスの構築・メンテナンス時に参照してください。
 
+## Stack
+
+- 構成: Markdown + JSON（プラグインマーケットプレイス）
+- バリデーション: `/plugin validate ./plugins/{name}`
+- SKILL.md: YAML frontmatter 必須（name, description）
+- 命名: kebab-case（メンバー名、スキル名）
+- バージョニング: semver
+
 ## プラグイン追加手順
 
 ### 1. メンバーディレクトリの作成
@@ -84,3 +92,7 @@ Use $ARGUMENTS for user input.
   "command": "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh"
 }
 ```
+
+## Memory ルール
+- GPT/Codex 由来の知見は `[source: codex]` タグを付与する
+- 検証済みの事実のみ Memory に保存する

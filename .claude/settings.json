@@ -1,0 +1,25 @@
+{
+    "permissions": {
+        "deny": [
+            "Edit(.claude-plugin/marketplace.json)",
+            "Edit(.claude/settings*)"
+        ]
+    },
+    "hooks": {
+        "PostToolUse": [
+            {
+                "matcher": "Write|Edit",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "bash .claude/hooks/validate-json-syntax.sh"
+                    },
+                    {
+                        "type": "command",
+                        "command": "bash .claude/hooks/validate-skill-frontmatter.sh"
+                    }
+                ]
+            }
+        ]
+    }
+}
