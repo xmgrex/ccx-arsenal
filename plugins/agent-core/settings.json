@@ -1,0 +1,16 @@
+{
+  "showThinkingSummaries": true,
+  "env": {
+    "ENABLE_TOOL_SEARCH": "true",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "permissions": {
+    "deny": [
+      "Edit(.claude/settings*)",
+      "Edit(~/.claude/settings.json)",
+      "Edit(~/.claude/settings.local.json)",
+      "Bash(rm -rf *)",
+      "Bash(git push *)"
+    ]
+  }
+}

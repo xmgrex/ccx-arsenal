@@ -24,6 +24,9 @@ file_path=$(echo "$input" | jq -r '.tool_input.file_path // empty')
 [[ "$file_path" == *.freezed.dart ]] && exit 0
 [[ "$file_path" == *.g.dart ]]      && exit 0
 
+# --- Auto-format ---
+dart format "$file_path" 2>/dev/null || true
+
 # Check if enn is a dependency
 if ! grep -q 'enn:' pubspec.yaml 2>/dev/null; then
   exit 0
