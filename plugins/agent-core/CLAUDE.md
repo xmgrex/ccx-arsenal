@@ -1,37 +1,42 @@
 # agent-core
 
-## Harness Pattern（アプリ開発のデフォルト）
+## TDD 駆動開発ワークフロー
 
-アプリケーション開発を依頼されたら harness パターンを使う。
+アプリケーション開発を依頼されたら `/harness-run` を使う。
 
-### Agents
+### Workflow（スキル組み合わせ型）
 
-| Agent | Role |
+```
+Plan Mode → /create-issue → Branch
+  → (/tdd-cycle → /verify-local → /smart-commit) × N
+  → /verify-local --full → /pr-description
+  → /local-code-review → ユーザーレビュー → マージ
+```
+
+### Skills（単独でも使える）
+
+| Skill | Role |
 |-------|------|
-| `harness-planner` | 短い説明 → 設計精錬 → 包括的仕様 + 実装チェックリスト |
-| `harness-generator` | 仕様 → TDD で実装（Defense-in-Depth 設計） |
-| `harness-evaluator` | 実動アプリを 2段階 QA（Spec Compliance → Code Quality） |
+| `/create-issue` | Issue 作成 + ブランチ |
+| `/tdd-cycle` | RED-GREEN-REFACTOR + 証拠出力 |
+| `/verify-local` | ビルド・テスト・lint 検証ゲート |
+| `/smart-commit` | 検証済みコミット |
+| `/pr-description` | PR 自動生成 |
+| `/local-code-review` | AI コードレビュー |
 
-### Flow
+### Agents（大規模開発で使用）
 
-```
-User → [曖昧?] → Phase 0: Design Refinement → User承認
-  → Phase 1: spawn planner → Spec + Checklist → User承認
-  → Phase 2: spawn generator (worktree, TDD) → App
-  → Phase 3: spawn evaluator → Stage 1: Spec Compliance
-      → FAIL? → Phase 4: spawn generator(s) (parallel if independent) → re-QA
-      → PASS? → Stage 2: Code Quality
-          → ITERATE? → Phase 4 (max 3 rounds)
-          → PASS? → Phase 5: /simplify → Phase 6: Final Verification → Delivery
-```
+| Agent | Role | 使用条件 |
+|-------|------|---------|
+| `harness-planner` | 仕様 + Implementation Checklist | 大規模 or 複雑な設計 |
+| `harness-generator` | worktree で TDD 実装 | タスク 11+ or Context Degradation |
+| `harness-evaluator` | Two-Stage QA | 大規模アプリの品質検証 |
 
 ### Rules
 
+- TDD 必須: RED/GREEN の証拠（テスト出力）を省略不可
 - Generator は自己評価禁止。QA は必ず別の evaluator agent
-- Planner 出力は必ずユーザー承認を挟む
-- QA は 2段階: Spec Compliance が PASS してから Code Quality を評価
+- 設計・Issue はユーザー承認を挟む
 - QA 3ラウンドで PASS しなければユーザーにエスカレーション
-- Generator は TDD 必須（RED-GREEN-REFACTOR）
-- 独立した QA issues は並列 Generator で修正
-- Simplify 後に Final Verification（証拠なき完了宣言の禁止）
+- 勝手にマージ・push しない
 - 詳細: `/harness-run`

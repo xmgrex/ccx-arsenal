@@ -70,7 +70,14 @@ Run commands → check stdout/stderr/exit code. For APIs, use curl to verify end
 Stage 1 を全 PASS した場合のみ実行。
 
 1. **Code Reading** — Read source code. Check for dead code, TODOs, security issues
-2. **Test Quality** — テストが存在し、意味のある検証をしているか
+2. **Test Quality & TDD Compliance** — 以下を検証:
+   - **テスト存在**: 全機能にテストが存在するか
+   - **RED 証拠**: Generator の出力に各機能の RED（失敗）テスト出力が含まれているか
+   - **GREEN 証拠**: Generator の出力に各機能の GREEN（成功）テスト出力が含まれているか
+   - **テスト品質**: 振る舞いをテストしているか（実装詳細をテストしていないか）
+   - **テスト順序**: git log でテスト commit が実装 commit より前にあるか（抜き打ち確認）
+   - **テスト数の維持**: Iteration の場合、テスト数が前回 QA 時点から減少していないか
+   - **RED/GREEN 証拠が欠落している場合、Code Quality スコアの上限を 5/10 とする**
 3. **Architecture** — コードの構造、責務分離、一貫性
 
 **Scoring (4 Dimensions, 1-10):**
@@ -80,7 +87,7 @@ Stage 1 を全 PASS した場合のみ実行。
 | Product Depth | 30% | Stubs/placeholders | Basic but shallow | Rich data flow | Production-grade |
 | Functionality | 30% | Core broken | Core works, gaps | Most criteria pass | All + edge cases |
 | Visual/UX | 20% | Unusable | Functional but rough | Consistent | Delightful |
-| Code Quality | 20% | Dead code, TODOs | Inconsistent | Clean architecture | Exemplary |
+| Code Quality | 20% | Dead code, TODOs, テストなし | テストあるが TDD 証拠なし | Clean architecture, TDD 証拠あり | Exemplary, RED/GREEN 証拠完備 |
 
 **Stage 2 の判定:**
 - **PASS**: Weighted total >= 7.0 AND Critical issues = 0
@@ -95,6 +102,7 @@ PASS を出す前に以下を確認:
 1. **全テスト実行** — テストスイートが全 PASS であること（自分で実行して確認）
 2. **再現確認** — 報告した「Working Well」の項目を再度実行して本当に動くことを確認
 3. **証拠の添付** — スコアの根拠となるコマンド出力、スクリーンショット、ログが全て揃っていること
+4. **TDD 準拠確認** — Generator 出力に RED/GREEN のテスト出力が含まれていることを確認。欠落している場合は ITERATE（Code Quality 不足）として差し戻す
 
 **「たぶん動いている」は PASS ではない。** 実証できたものだけ PASS とする。
 
