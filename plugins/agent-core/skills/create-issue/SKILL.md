@@ -32,9 +32,16 @@ gh issue create \
 <何を、なぜ実装するか>
 
 ## Acceptance Criteria
-- [ ] <検証可能な完了条件 1>
-- [ ] <検証可能な完了条件 2>
-- [ ] <検証可能な完了条件 3>
+
+### AC-1: <名前>
+- **入力**: <具体的な入力データ>
+- **操作**: <何をするか>
+- **期待値**: <何が起こるべきか>
+
+### AC-2: <名前>
+- **入力**: <具体的な入力データ>
+- **操作**: <何をするか>
+- **期待値**: <何が起こるべきか>
 
 ## Implementation Checklist
 - [ ] Write test: <テスト内容>
@@ -65,6 +72,10 @@ git switch -c <type>/issue-<number>-<short-description>
 
 ## 原則
 
-- **Acceptance Criteria は検証可能に書く** — 「〜できること」ではなく「〜した場合に〜が返ること」
+- **Acceptance Criteria は「入力・操作・期待値」の3点セットで書く** — 「〜できること」ではなく具体的に
 - **1 Issue = 1つの論理的な変更単位** — 大きすぎる場合は分割
 - **Implementation Checklist に TDD を埋め込む** — テスト→実装の順序を構造的に強制
+
+## Next
+
+→ `/tdd-cycle` で Implementation Checklist の各タスクを実装開始

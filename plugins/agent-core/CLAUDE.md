@@ -1,42 +1,82 @@
 # agent-core
 
-## TDD 駆動開発ワークフロー
+## TDD 駆動開発ワークフロー（二重ループ）
 
-アプリケーション開発を依頼されたら `/harness-run` を使う。
-
-### Workflow（スキル組み合わせ型）
+### Workflow（どこからでも開始可能）
 
 ```
-Plan Mode → /create-issue → Branch
-  → (/tdd-cycle → /verify-local → /smart-commit) × N
-  → /verify-local --full → /pr-description
-  → /local-code-review → ユーザーレビュー → マージ
+内側ループ（Generator = TDD サイクル）:
+  /create-issue → (/tdd-cycle → /verify-local → /smart-commit) × N
+
+外側ループ（Evaluator = E2E/UI 検証）:
+  全機能完了 → /e2e-evaluate
+    ├─ PASS → /pr-description → ユーザーレビュー → マージ
+    └─ ITERATE → 修正指示付きで /tdd-cycle に差し戻し（最大3ラウンド）
 ```
 
-### Skills（単独でも使える）
+各スキルは独立。途中から開始可能。
 
-| Skill | Role |
+### Generator（内側ループ）
+
+`/tdd-cycle` は内部で fork ベースのスキルを連鎖:
+```
+/tdd-cycle
+  ├─ /red-test      → fork → tester（テスト作成 & RED 確認）
+  ├─ /audit-tests   → fork → test-auditor（AC カバレッジ + 報酬ハック検出）
+  ├─ /implement     → fork → implementer（実装）
+  ├─ /verify-test   → fork → tester（テスト実行 & GREEN 確認）
+  ├─ /simplify      → コード整理（自動リファクタ）
+  └─ /verify-test   → fork → tester（simplify で壊れてないか確認）
+```
+
+### Evaluator（外側ループ）
+
+```
+/e2e-evaluate → fork → acceptance-tester
+  ├─ AC 検証（全機能を実動テスト）
+  └─ デザイン4軸評価（UI アプリの場合）
+      Design Quality / Originality / Craft / Functionality
+```
+
+### Skills
+
+| Skill | Role | Next |
+|-------|------|------|
+| `/create-issue` | Issue 作成 + ブランチ | → `/tdd-cycle` |
+| `/tdd-cycle` | fork ベース RED-GREEN-REFACTOR | → `/verify-local` |
+| `/verify-local` | ビルド・テスト・lint 検証 | → `/smart-commit` |
+| `/smart-commit` | 検証済みコミット | → `/tdd-cycle` or `/e2e-evaluate` |
+| `/e2e-evaluate` | E2E + デザイン評価（fork） | → `/pr-description` or ITERATE |
+| `/pr-description` | PR 作成 + CI + `/code-review --comment` | → ユーザーレビュー |
+
+### Fork Skills
+
+| Skill | fork 先 | 用途 |
+|-------|---------|------|
+| `/red-test` | tester | テスト作成 |
+| `/audit-tests` | test-auditor | テスト品質監査 |
+| `/implement` | implementer | 実装 |
+| `/verify-test` | tester | テスト実行 |
+| `/e2e-evaluate` | acceptance-tester | E2E + デザイン評価 |
+| `/review-impl` | reviewer | コードレビュー（任意） |
+
+### Agents
+
+| Agent | Role |
 |-------|------|
-| `/create-issue` | Issue 作成 + ブランチ |
-| `/tdd-cycle` | RED-GREEN-REFACTOR + 証拠出力 |
-| `/verify-local` | ビルド・テスト・lint 検証ゲート |
-| `/smart-commit` | 検証済みコミット |
-| `/pr-description` | PR 自動生成 |
-| `/local-code-review` | AI コードレビュー |
-
-### Agents（大規模開発で使用）
-
-| Agent | Role | 使用条件 |
-|-------|------|---------|
-| `harness-planner` | 仕様 + Implementation Checklist | 大規模 or 複雑な設計 |
-| `harness-generator` | worktree で TDD 実装 | タスク 11+ or Context Degradation |
-| `harness-evaluator` | Two-Stage QA | 大規模アプリの品質検証 |
+| `tester` | テスト専門 |
+| `test-auditor` | テスト品質監査（読み取り専用） |
+| `implementer` | 実装専門 |
+| `acceptance-tester` | E2E + デザイン評価 |
+| `reviewer` | コードレビュー（読み取り専用、任意） |
+| `planner` | 仕様 + Implementation Checklist（複雑な設計時） |
 
 ### Rules
 
 - TDD 必須: RED/GREEN の証拠（テスト出力）を省略不可
-- Generator は自己評価禁止。QA は必ず別の evaluator agent
+- fork スキルはメイン会話から直接呼ぶ場合に有効（サブエージェントのネスト不可）
+- Evaluator は Generator とは別コンテキスト（Self-Evaluation Bias 防止）
+- E2E で ITERATE → 最大3ラウンド、超過でユーザーにエスカレーション
+- AIコードレビューは `/code-review --comment` で PR 上に投稿
 - 設計・Issue はユーザー承認を挟む
-- QA 3ラウンドで PASS しなければユーザーにエスカレーション
 - 勝手にマージ・push しない
-- 詳細: `/harness-run`
