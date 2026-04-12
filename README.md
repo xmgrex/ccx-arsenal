@@ -78,4 +78,4 @@ ccx-arsenal/
 
 ## ライセンス
 
-Private - 個人使用のみ
+MIT License
