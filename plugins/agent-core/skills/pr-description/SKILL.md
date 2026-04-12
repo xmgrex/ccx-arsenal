@@ -83,11 +83,16 @@ CI が失敗した場合:
 
 ### 4. AI コードレビュー
 
-```bash
-/code-review --comment    # PR にレビューコメントを投稿
+```
+/pr-review    # PR にレビューコメントを投稿
 ```
 
-サブスク内で完結。PR の diff を4エージェントが並列レビューし、信頼度80以上の指摘のみ PR コメントに投稿する。
+`/pr-review` は公式 `code-review` プラグイン（`anthropics/claude-plugins-official`）が利用可能であればそれに委譲し、未インストールの場合は ccx-arsenal の `reviewer` エージェント（Anti-Bias Rules 搭載）でフォールバック実行する。
+
+**公式プラグインを推奨**（より堅牢な4エージェント並列レビュー + 信頼度スコアリング）:
+```shell
+claude plugin install code-review@claude-plugins-official
+```
 
 レビュー指摘への対応:
 1. Critical な指摘 → 修正して追加コミット
