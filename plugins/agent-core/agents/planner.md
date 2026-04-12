@@ -1,5 +1,5 @@
 ---
-name: harness-planner
+name: planner
 description: Expands a brief app description into a comprehensive product specification with testable acceptance criteria.
 model: opus
 tools: "*"
