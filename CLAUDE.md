@@ -8,7 +8,7 @@
 - バリデーション: `/plugin validate ./plugins/{name}`
 - SKILL.md: YAML frontmatter 必須（name, description）
 - 命名: kebab-case（メンバー名、スキル名）
-- バージョニング: semver
+- バージョニング: semver（**`.claude-plugin/marketplace.json` で一元管理**。plugin.json には version を書かない）
 
 ## プラグイン追加手順
 
@@ -27,12 +27,13 @@ mkdir -p plugins/{member_name}/skills
 {
   "name": "{member_name}",
   "description": "Plugins by {member_name}",
-  "version": "1.0.0",
   "author": {
     "name": "{member_name}"
   }
 }
 ```
+
+**重要**: `version` フィールドを plugin.json に書いてはならない。バージョンは `.claude-plugin/marketplace.json` で一元管理する（二重管理による不整合を防ぐため）。
 
 ### 3. marketplace.json への登録
 
@@ -40,11 +41,19 @@ mkdir -p plugins/{member_name}/skills
 
 ```json
 {
-  "name": "{member_name}",
-  "source": "{member_name}",
-  "description": "Plugins by {member_name}"
+  "name": "{plugin_name}",
+  "description": "...",
+  "version": "1.0.0",
+  "author": {
+    "name": "{author_name}"
+  },
+  "source": "./plugins/{plugin_name}",
+  "category": "development",
+  "keywords": ["..."]
 }
 ```
+
+**バージョンアップ時**: marketplace.json の該当プラグインの `version` フィールドのみを更新する。plugin.json 側は触らない。
 
 ## スキル作成規則
 
@@ -81,7 +90,7 @@ Use $ARGUMENTS for user input.
 |------|------|-----|
 | メンバー名 | kebab-case | `taro-yamada` |
 | スキル名 | kebab-case | `code-review` |
-| プラグインバージョン | semver | `1.0.0` |
+| プラグインバージョン | semver（marketplace.json のみ） | `1.0.0` |
 
 ## 環境変数
 

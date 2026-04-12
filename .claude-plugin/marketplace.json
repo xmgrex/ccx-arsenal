@@ -44,7 +44,7 @@
     {
       "name": "agent-core",
       "description": "Essential skills for mastering AI agent collaboration. Includes TDD-driven workflow with skeptical evaluators, planning, PR review, and deterministic skill chains.",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "author": {
         "name": "xmgrex"
       },
