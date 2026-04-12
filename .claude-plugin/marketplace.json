@@ -43,14 +43,14 @@
     },
     {
       "name": "agent-core",
-      "description": "Essential skills for mastering AI agent collaboration. Includes intent clarification, delegation decisions, and skill activation patterns.",
-      "version": "1.0.0",
+      "description": "Essential skills for mastering AI agent collaboration. Includes TDD-driven workflow with skeptical evaluators, planning, PR review, and deterministic skill chains.",
+      "version": "1.1.0",
       "author": {
         "name": "xmgrex"
       },
       "source": "./plugins/agent-core",
       "category": "productivity",
-      "keywords": ["agent", "delegation", "intent", "skills", "orchestration", "meta"]
+      "keywords": ["agent", "delegation", "intent", "skills", "orchestration", "meta", "tdd", "planning", "pr-review"]
     },
     {
       "name": "flutter-guardian",

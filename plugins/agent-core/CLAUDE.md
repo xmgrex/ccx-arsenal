@@ -5,12 +5,26 @@
 ### Workflow
 
 ```
-Phase 0: 設計（Planner）
-  /planning → fork → planner
-    → Product Spec + AC + Implementation Checklist
+Phase 0: 設計 + 二段階自動収束レビュー
+  /planning → main が orchestrator（インライン）
+    │
+    ├─ Stage 1: Spec/Flow 収束ループ（最大3ラウンド）
+    │   ├─ Agent(planner) → spec.md + flow.md (UI時)
+    │   └─ 並列 Agent(spec-reviewer) + Agent(flow-reviewer)
+    │
+    ├─ Stage 2: UI Design 収束ループ（最大3ラウンド、UI アプリのみ）
+    │   ├─ Agent(ui-designer) → screens/*.html + index.html
+    │   ├─ 決定論ゲート（リンク整合性 / flow↔screens 整合 / 装飾 pre-scan）
+    │   └─ Agent(ui-design-reviewer)
+    │
+    └─ 両 Stage 収束 → ユーザー承認ゲート（ブラウザ確認案内）→ /create-issue
+       3ラウンドで収束せず → ユーザーエスカレーション
+
+  （手動 re-review 用に /plan-review をスタンドアロン提供。screens 存在時は 3 体並列）
 
 内側ループ（Generator = TDD サイクル）:
-  /create-issue → (/tdd-cycle → /verify-local → /smart-commit) × N
+  /create-issue [spec-path]   ← Spec から Phase 1 の Feature を一括 Issue 化
+    → (/tdd-cycle → /verify-local → /smart-commit) × N
 
 外側ループ（Evaluator = E2E/UI 検証）:
   全機能完了 → /e2e-evaluate
@@ -46,8 +60,9 @@ Phase 0: 設計（Planner）
 
 | Skill | Role | Next |
 |-------|------|------|
-| `/planning` | **起点** — Spec + AC + Checklist 生成（fork） | → `/create-issue` |
-| `/create-issue` | Issue 作成 + ブランチ | → `/tdd-cycle` |
+| `/planning` | **起点** — Spec + Flow.md + HTML screens 生成 + 二段階収束ループ（Stage 1: spec/flow / Stage 2: UI design、各最大3ラウンド）+ ユーザー承認ゲート | → `/create-issue` |
+| `/plan-review` | スタンドアロン版レビュー — 既存 spec/flow/screens を手動 re-review（収束ループなし、screens 存在時は 3 体並列） | → 手動判断 |
+| `/create-issue` | Spec ファイルから Phase 1 Feature を一括 Issue 化 | → `/tdd-cycle` |
 | `/tdd-cycle` | fork ベース RED-GREEN-REFACTOR | → `/verify-local` |
 | `/verify-local` | ビルド・テスト・lint 検証 | → `/smart-commit` |
 | `/smart-commit` | 検証済みコミット | → `/tdd-cycle` or `/e2e-evaluate` |
@@ -59,7 +74,6 @@ Phase 0: 設計（Planner）
 
 | Skill | fork 先 | 用途 |
 |-------|---------|------|
-| `/planning` | planner | Spec + AC + Implementation Checklist 生成 |
 | `/red-test` | tester | テスト作成 |
 | `/audit-tests` | test-auditor | テスト品質監査 |
 | `/implement` | implementer | 実装 |
@@ -71,7 +85,11 @@ Phase 0: 設計（Planner）
 
 | Agent | Role |
 |-------|------|
-| `planner` | **起点** — Product Spec + Implementation Checklist 生成 |
+| `planner` | **起点** — Product Spec + Flow.md + Implementation Checklist 生成 / Revise Mode で差分修正 |
+| `spec-reviewer` | Spec 品質レビュー（User Story / AC / Feature scope / 粒度 / 欠落）read-only、Anti-Bias Rules 搭載 |
+| `flow-reviewer` | Flow.md 評価（到達可能性 / Feature カバレッジ / 退出経路 / トリガラベル）read-only、Anti-Bias Rules 搭載 |
+| `ui-designer` | クリッカブル HTML screens 生成（Tailwind layout-only / 装飾禁止 / セマンティック）/ Revise Mode で差分修正 |
+| `ui-design-reviewer` | screens HTML 評価（HTML 妥当性 / リンク整合性 / flow ↔ screens 整合 / 装飾過剰検出 / 情報階層 / コンポーネント再利用 / 状態カバレッジ / ネイティブ警告）read-only、Anti-Bias Rules 搭載 |
 | `tester` | テスト専門 |
 | `test-auditor` | テスト品質監査（読み取り専用） |
 | `implementer` | 実装専門 |
@@ -81,6 +99,13 @@ Phase 0: 設計（Planner）
 ### Rules
 
 - **アプリ開発依頼時は原則 `/planning` から開始**（Spec/AC が既にある場合のみスキップ可）
+- **Phase 0 は `/planning` の二段階収束ループで完結** → ユーザー承認 → `/create-issue` の順
+- Stage 1 (spec/flow) と Stage 2 (UI design) は各最大 3 ラウンド。収束しなければ全ラウンド履歴付きでユーザーエスカレーション
+- **Stage 2 は UI アプリのみ実行**。CLI/API/ライブラリは Stage 2 全体をスキップ
+- 各ラウンドの planner / spec-reviewer / flow-reviewer / ui-designer / ui-design-reviewer は必ず**fresh spawn**（kill-and-spawn）
+- spec-reviewer と flow-reviewer は**同一メッセージ内で並列 spawn**（Agent ツールを2つ同時に call）
+- **screens HTML は構造リファレンス**（装飾禁止 / Tailwind layout クラスのみ）— 視覚デザインではない
+- ui-design-reviewer の前にスキル側で**決定論ゲート**（リンク整合性 / flow ↔ screens 整合 / 装飾 pre-scan）を実行し結果を注入する
 - TDD 必須: RED/GREEN の証拠（テスト出力）を省略不可
 - fork スキルはメイン会話から直接呼ぶ場合に有効（サブエージェントのネスト不可）
 - Evaluator は Generator とは別コンテキスト（Self-Evaluation Bias 防止）
@@ -89,3 +114,4 @@ Phase 0: 設計（Planner）
 - **決定論ゲートを優先**: 重要な連鎖（PR レビュー等）は `!command` 構文で SKILL.md に埋め込み、Claude の判断スキップを防ぐ。エージェントの裁量で省略すべきでないステップは `!` 構文で固める
 - 設計・Issue はユーザー承認を挟む
 - 勝手にマージ・push しない
+- **バイアスなき品質検証**: 常にレビューはkillしてspawnしながら進める
