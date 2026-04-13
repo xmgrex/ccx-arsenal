@@ -1,297 +1,313 @@
 # agent-core
 
-TDD 駆動開発ワークフローを fork ベースの独立エージェントで実現する、Claude Code プラグインです。
+自律開発 harness for Claude Code。**H-Consensus (Tiered Static Fork)** モデルに基づく、KPI→Spec→Story→Sprint Contract の段階的設計と決定論 tier 分岐による fork ベース内側ループを提供します。
 
 ## 概要
 
-`agent-core` は、AI エージェントに**役割ごとに独立したコンテキスト**で作業させることで、Self-Evaluation Bias（自己評価バイアス）を排除し、懐疑的な検証を強制するワークフローを提供します。
+`agent-core` は、AI エージェントに**役割ごとに独立したコンテキスト**で作業させることで、Self-Evaluation Bias（自己評価バイアス）を排除し、懐疑的な検証を強制する harness です。
 
-実装者・テスター・評価者を別々のエージェントとして fork することで、以下を実現します:
+設計の核心は 3 本柱:
 
-- **TDD 必須** — RED/GREEN の証拠を省略できない
-- **評価者の独立性** — 実装したエージェントが自分で「動作確認」しない
-- **報酬ハック検出** — テストが甘くないか別エージェントが監査する
-- **懐疑的な受け入れテスト** — Anti-Bias Rules と Confidence レベルを持つ評価者
+1. **二重フィードバックループ**: generator (fork) と evaluator (fork) を物理的に分離し、harness blog の 20x 品質ゲインを回収する
+2. **Tiered Static Fork**: Sprint Contract の metadata から決定論的に tier (T1/T2/T3) を判定し、fork 構成を sprint 開始時に静的確定
+3. **Gotcha 2 層学習**: prompt 層 (agent/skill MD) + 構造層 (tier-matrix) の複利学習で時間経過とともに品質が向上
 
 ## 前提条件
 
-- **Opus 4.6** — planner / spec-reviewer / flow-reviewer / acceptance-tester は opus を要求
+- **Opus 4.6** — planner / spec-reviewer / flow-reviewer / acceptance-tester / contract-reviewer / post-mortem は opus を要求
+- **Sandbox で動く** — 内側ループは完全オフライン (gh CLI 一切不要)、publish レーンのみ gh 依存
 
 ## インストール
 
 ```shell
-# マーケットプレイスを登録
 /plugin marketplace add xmgrex/ccx-arsenal
-
-# プラグインをインストール
 /plugin install agent-core@ccx-arsenal
 ```
 
-## ワークフロー（二重ループ + 二段階設計収束ループ）
+---
+
+## Doc 階層と Pipeline
 
 ```
-Phase 0: 設計 + 二段階自動収束レビュー
-  /planning → main が orchestrator（インライン）
-    │
-    ├─ Stage 1: Spec/Flow 収束ループ（最大3ラウンド）
-    │   ├─ Agent(planner) → spec.md + flow.md (UI時)
-    │   └─ 並列 Agent(spec-reviewer) + Agent(flow-reviewer)
-    │
-    ├─ Stage 2: UI Design 収束ループ（最大3ラウンド、UI アプリのみ）
-    │   ├─ Agent(ui-designer) → screens/*.html + index.html
-    │   ├─ 決定論ゲート（リンク整合性 / flow↔screens 整合 / 装飾 pre-scan）
-    │   └─ Agent(ui-design-reviewer)
-    │
-    └─ 両 Stage 収束 → ユーザー承認ゲート（ブラウザ確認案内）→ /create-issue
-
-  （手動 re-review 用に /plan-review をスタンドアロン提供。screens 存在時は 3 体並列）
-
-内側ループ（Generator = TDD サイクル）:
-  /create-issue → (/tdd-cycle → /verify-local → /smart-commit) × N
-
-外側ループ（Evaluator = E2E/UI 検証）:
-  全機能完了 → /e2e-evaluate
-    ├─ PASS → /pr-description → ユーザーレビュー → マージ
-    └─ ITERATE → 修正指示付きで /tdd-cycle に差し戻し（最大3ラウンド）
+KPI.md      ── 成功定義 / 撤退条件 / Non-Goals         (Phase 0 Stage 0)
+  ↓ HITL
+Spec.md     ── Feature / User Story / AC              (Phase 0 Stage 1)
+  ↓ HITL
+Story.md    ── Value 単位 / Sprint 見積 / 依存 DAG    (Phase 0 Stage 2)
+  ↓ HITL
+[Screens]   ── HTML wireframes (UI アプリのみ)         (Phase 0 Stage 3)
+  ↓ HITL
+Sprint Contract (lazy, 1 sprint ずつ)                 (/generate Step 3)
+  ↓
+Ticket JSON ── .agent-core/tickets/T-XXXX.json
+  ↓ classify-tier.sh (決定論)
+T1 / T2 / T3 で fork 構成分岐
+  ↓
+Implementation (tier-specific fork chain)
+  ↓
+Hard threshold Evaluation (acceptance-tester fork)
+  ↓
+Sprint record + Gotcha extraction (post-mortem fork)
 ```
 
-**アプリ開発の依頼を受けたら、原則 `/planning` から開始します。** `/planning` は曖昧な要求を Product Spec + Flow.md + クリッカブル HTML screens に変換し、二段階収束ループで自動的にレビュー反復させます。Stage 1 で spec/flow を確定し、Stage 2 で screens HTML を確定。両方収束後にユーザー承認を取って `/create-issue` へ進みます。
+## Tier Matrix (決定論判定)
 
-UI アプリの場合、Phase 0 完了時点で **`open .agent-core/specs/{slug}-screens/index.html`** でブラウザを開けば、各画面をクリックで遷移できる**触れる spec** ができあがっています。「画面は作ったが導線が違う」「視覚的にズレている」が TDD 開始前に潰せます。
+| Tier | 判定ルール | Fork 構成 | 対象例 |
+|------|----------|----------|--------|
+| **T1 低** | verifiability=exec AND risk_layer ∈ {doc, rename, config} AND surface ≤ 3 | ticket-executor + verify-local (2 fork) | typo, rename, config 変更 |
+| **T2 中** | 上記以外かつ risk_layer ∉ {auth, db, api, migration, security} かつ surface < 10 | tester(red) → implementer → tester(verify) → acceptance-tester (4 fork) | feature 追加, bug fix, UI 変更 |
+| **T3 高** | risk_layer ∈ {auth, db, api, migration, security} OR surface ≥ 10 | contract-reviewer + tester(red) + test-auditor + implementer + tester(verify) + reviewer + acceptance-tester + post-mortem (7-8 fork) | auth 変更, db schema, migration, API contract |
 
-Spec / Flow / Screens が既にある場合のみ Phase 0 をスキップ可能。各スキルは独立しており、途中から開始することもできます。
+**全 tier 不可侵**:
+- test-writer (tester fork via red-test) ≠ implementer (fork via implement)
+- evaluator (acceptance-tester fork) ≠ generator
 
-### Phase 0: /planning（設計 + 二段階収束レビューループ）
+**コールドスタート保護**: post-mortem 10 件 **or** sprint 20 件の閾値に達するまで、全 sprint を強制 T2 で実行。`scripts/cold-start-check.sh` が判定。
 
-```shell
-/planning "タスク管理アプリを作りたい"
+---
+
+## ワークフロー全体図
+
+```mermaid
+flowchart TD
+    Start(["👤 User: アプリ作りたい"]) --> Planning["/planning"]
+
+    subgraph Phase0["🎨 Phase 0: 設計 (4 stage 収束ループ、fully offline)"]
+        Planning --> S0{"Stage 0<br/>KPI.md<br/>max 3R"}
+        S0 -->|NEEDS_FIX| S0
+        S0 -->|OK| HITL0["👤 HITL"]
+        HITL0 --> S1{"Stage 1<br/>Spec.md + Flow.md<br/>max 3R"}
+        S1 -->|NEEDS_FIX| S1
+        S1 -->|OK| HITL1["👤 HITL"]
+        HITL1 --> S2{"Stage 2<br/>Story.md<br/>max 3R"}
+        S2 -->|NEEDS_FIX| S2
+        S2 -->|OK| HITL2["👤 HITL"]
+        HITL2 --> S3{"Stage 3<br/>UI Screens<br/>max 3R<br/>(UI app only)"}
+        S3 -->|NEEDS_FIX| S3
+        S3 -->|OK / SKIP| HITL3["👤 最終承認"]
+    end
+
+    HITL3 --> Generate["/generate S-XX"]
+
+    subgraph Generator["⚙️ /generate — Tiered Static Fork (fully offline)"]
+        Generate --> G1["Step 1: cold-start-check"]
+        G1 --> G2["Step 2: Story pick"]
+        G2 --> G3["Step 3: Sprint Contract 交渉<br/>(planner + contract-reviewer fork)"]
+        G3 -->|OK| G4["Step 4: classify-tier.sh<br/>(決定論 T1/T2/T3)"]
+        G4 -->|T1| T1["T1: ticket-executor + verify-local"]
+        G4 -->|T2| T2["T2: red-test → implement → verify → e2e"]
+        G4 -->|T3| T3["T3: contract-reviewer → red-test → audit<br/>→ implement → verify → review-impl → e2e<br/>→ post-mortem"]
+        T1 --> G5["Step 5: hard threshold 評価"]
+        T2 --> G5
+        T3 --> G5
+        G5 -->|PASS| G6["Step 6: sprint 記録"]
+        G5 -->|ITERATE max 3R| G4
+        G6 --> G7["Step 7: smart-commit"]
+        G7 --> G8{"次 sprint?"}
+        G8 -->|"同 Story 継続"| G2
+    end
+
+    G8 -->|全 Story 完了| E2E["/e2e-evaluate"]
+    E2E -->|PASS| PublishQ{"team に共有?"}
+    PublishQ -->|No| DoneLocal(["✅ 完了: local のみ"])
+
+    subgraph PublishLane["🌐 Publish Lane (opt-in, gh 必須)"]
+        PublishQ -->|Yes| TP["/ticket-publish T-XXXX"]
+        TP --> PRD["/pr-description"]
+        PRD --> PR[("GitHub PR")]
+        PR --> PRR["/pr-review"]
+        PRR --> DoneMerge(["✅ マージ完了"])
+    end
 ```
 
-main Claude が orchestrator となり、以下を実行します:
+**Local-first 設計**: 内側ループは完全オフライン動作 (`.agent-core/tickets/`, `.agent-core/sprints/`, `.agent-core/gotchas/` がローカル権威)。GitHub 連携は **opt-in publish レーン**のみ。
 
-#### Stage 1: Spec/Flow 収束（最大 3 ラウンド）
-
-1. **planner fresh spawn** — Product Spec を `.agent-core/specs/{slug}-spec.md` に生成。UI アプリなら `{slug}-flow.md` も生成（Mermaid 画面遷移図 + Feature→画面マッピング）
-2. **並列レビュー spawn** — `spec-reviewer` と `flow-reviewer` を**同一メッセージ内で並列 spawn**
-3. **判定** — 両方 OK → Stage 2 へ / NEEDS_FIX → planner を Revise Mode で再起動して Round N+1 へ
-4. **3 ラウンドで収束せず** → エスカレーション
-
-#### Stage 2: UI Design 収束（最大 3 ラウンド、UI アプリのみ）
-
-CLI/API/ライブラリは Stage 2 全体をスキップ。
-
-1. **ui-designer fresh spawn** — flow.md の全画面ノードに対応する `{slug}-screens/{screen-id}.html` と `index.html` を生成。Tailwind layout クラスのみ使用、装飾禁止
-2. **決定論ゲート** — リンク切れ / 孤立画面 / 余剰画面 / 装飾違反を `!` 構文で機械検出
-3. **ui-design-reviewer fresh spawn** — 決定論ゲート結果 + 8 軸の人間的判断（情報階層、コンポーネント再利用、状態カバレッジ等）
-4. **判定** — OK → ユーザー承認ゲートへ / NEEDS_FIX → ui-designer を Revise Mode で再起動して Round N+1 へ
-5. **3 ラウンドで収束せず** → エスカレーション
-
-#### ユーザー承認ゲート
-
-両 Stage 収束後、収束サマリーとブラウザ確認コマンド (`open {SCREENS_DIR}/index.html`) を提示してユーザーの明示承認を得てから `/create-issue` を実行します。
-
-**kill-and-spawn 原則**: 各ラウンドの planner / spec-reviewer / flow-reviewer / ui-designer / ui-design-reviewer は必ず**新規 Agent コール**で fresh spawn します（前ラウンドの context は持ち越さない）。
-
-手動で既存 spec/flow/screens を再レビューしたい場合は `/plan-review` をスタンドアロンで使用できます（screens 存在時は 3 体並列、なければ 2 体並列）。
-
-### Generator（内側ループ）
-
-`/tdd-cycle` は内部で fork ベースのスキルを連鎖させます:
-
-```
-/tdd-cycle
-  ├─ /red-test      → fork → tester        （テスト作成 & RED 確認）
-  ├─ /audit-tests   → fork → test-auditor  （AC カバレッジ + 報酬ハック検出）
-  ├─ /implement     → fork → implementer   （実装 & GREEN 確認）
-  ├─ /verify-test   → fork → tester        （再度テスト実行）
-  ├─ /simplify      → コード整理（リファクタ）
-  └─ /verify-test   → fork → tester        （壊れていないか確認）
-```
-
-### Evaluator（外側ループ）
-
-```
-/e2e-evaluate → fork → acceptance-tester
-  ├─ Phase 1: AC 検証（全機能を実動テスト）
-  ├─ Phase 2: デザイン4軸評価（UI アプリの場合）
-  │           Design Quality / Originality / Craft / Functionality
-  └─ Phase 3: Negative & Adversarial Testing（機能を壊そうとする）
-```
-
-評価者は `acceptance-tester` として独立した fork で実行されるため、実装者のコンテキストに影響されません。
+---
 
 ## Skills 一覧
 
-### Core Workflow（通常のワークフロー）
+### Core Workflow (新フロー)
 
 | Skill | 役割 | Next |
 |-------|------|------|
-| `/planning` | **起点** — Spec + Flow.md + HTML screens 生成 + 二段階収束ループ（Stage 1: spec/flow / Stage 2: UI design、各最大3ラウンド）+ ユーザー承認ゲート | → `/create-issue` |
-| `/plan-review` | スタンドアロン版レビュー — 既存 spec/flow/screens を手動 re-review（screens 存在時は 3 体並列、なければ 2 体） | → 手動判断 |
-| `/create-issue` | タスクを GitHub Issue として構造化 | → `/tdd-cycle` |
-| `/tdd-cycle` | RED-GREEN-REFACTOR（fork ベース） | → `/verify-local` |
-| `/verify-local` | ビルド・テスト・lint 検証ゲート | → `/smart-commit` |
-| `/smart-commit` | 検証済みコミット作成 | → `/tdd-cycle` or `/e2e-evaluate` |
-| `/e2e-evaluate` | E2E + デザイン評価（fork） | → `/pr-description` or ITERATE |
-| `/pr-description` | PR 自動生成 | → `/pr-review` |
-| `/pr-review` | PR コードレビュー（公式優先 + フォールバック） | → ユーザーレビュー |
+| `/planning` | **起点** — KPI/Spec/Story/(Screens) の 4 stage 収束ループ、各 max 3 round | → `/generate` |
+| `/generate` | **内側ループ orchestrator** — Sprint Contract 交渉 + tier 判定 + tier 別 fork 実行 + sprint 記録 + loop | → `/e2e-evaluate` or 次 sprint |
+| `/e2e-evaluate` | 外側ループ evaluator (全機能完了後) | → `/ticket-publish` (opt-in) |
+| `/plan-review` | スタンドアロン版 Phase 0 レビュー (収束ループなし) | → 手動判断 |
+| `/tier-matrix-review` | **3 ヶ月周期** の構造層 Gotcha 学習 HITL レビュー | → tier 判定ルール改定 |
 
-### Fork Skills（サブエージェント起動）
+### Deprecated (1.3.0+、後方互換のみ)
 
-| Skill | fork 先エージェント | 用途 |
-|-------|-----------------|------|
+| Skill | 役割 | 代替 |
+|-------|------|------|
+| `/create-ticket` | ⚠️ Spec から Phase 1 Feature を eager 一括生成 | `/generate` (lazy) |
+| `/tdd-cycle` | ⚠️ RED-GREEN-REFACTOR 単発 | `/generate` の T2 分岐 |
+| `/ticket-cycle` | ⚠️ AC 駆動実装 (非 TDD) | `/generate` の T1 分岐 |
+
+### Atomic Fork Skills (`/generate` から内部的に呼ばれる)
+
+| Skill | fork 先 | 用途 |
+|-------|---------|------|
 | `/red-test` | tester | テスト作成 & RED 確認 |
-| `/audit-tests` | test-auditor | テスト品質監査（AC カバレッジ + 報酬ハック検出） |
-| `/implement` | implementer | テストを通す実装 |
-| `/verify-test` | tester | テスト実行 & GREEN/FAIL 判定 |
+| `/audit-tests` | test-auditor | AC カバレッジ + 報酬ハック検出 |
+| `/implement` | implementer | テストを通す最小実装 |
+| `/verify-test` | tester | テスト実行 & GREEN/FAIL |
+| `/review-impl` | reviewer | コードレビュー (T3 のみ) |
 | `/e2e-evaluate` | acceptance-tester | E2E + デザイン評価 |
-| `/review-impl` | reviewer | コードレビュー（任意） |
 
 ### 補助 Skills
 
 | Skill | 用途 |
 |-------|------|
-| `/investigate` | 構造化されたバグ調査・デバッグワークフロー |
+| `/verify-local` | ビルド・テスト・lint 検証ゲート (stack auto-detect) |
+| `/smart-commit` | 検証済みコミット作成 (Ticket/Sprint trailer) |
+| `/investigate` | 構造化デバッグワークフロー |
+| `/ticket-publish` | opt-in で ticket を GitHub Issue 化 |
+| `/pr-description` | PR 自動生成 (Ticket trailer から関連チケット解決) |
+| `/pr-review` | PR コードレビュー投稿 |
+
+---
 
 ## Agents 一覧
 
-| Agent | Model | 役割 |
-|-------|-------|------|
-| `planner` | opus | **起点** — Product Spec + Flow.md + Implementation Checklist 生成 / Round 2+ は Revise Mode で差分修正 |
-| `spec-reviewer` | opus | Spec 品質レビュー（User Story / AC / Feature scope / 粒度 / 欠落）read-only、Anti-Bias Rules 搭載 |
-| `flow-reviewer` | opus | Flow.md 評価（到達可能性 / Feature カバレッジ / 退出経路 / トリガラベル）read-only、Anti-Bias Rules 搭載 |
-| `ui-designer` | opus | クリッカブル HTML screens 生成（Tailwind layout-only / 装飾禁止 / セマンティック HTML）/ Round 2+ は Revise Mode |
-| `ui-design-reviewer` | opus | screens HTML 評価（HTML 妥当性 / リンク整合性 / flow ↔ screens 整合 / 装飾過剰検出 / 情報階層 / コンポーネント再利用 / 状態カバレッジ / ネイティブ警告）read-only、Anti-Bias Rules 搭載 |
-| `tester` | sonnet | テストファイルの作成・修正・実行のみ |
-| `implementer` | sonnet | テストを通すソースコード実装（テストは変更不可） |
-| `test-auditor` | opus | テスト品質監査（読み取り専用、Anti-Bias Rules 搭載） |
-| `acceptance-tester` | opus | E2E + デザイン評価（Anti-Bias Rules 搭載） |
-| `reviewer` | opus | コードレビュー（読み取り専用、Anti-Bias Rules 搭載） |
+| Agent | Model | 役割 | 呼ばれ方 |
+|-------|-------|------|---------|
+| `planner` | opus | KPI / Spec / Story を Mode 分岐で生成 / Revise Mode で差分修正 | `/planning` |
+| `spec-reviewer` | opus | Mode 分岐で KPI/Spec/Story をレビュー (read-only) | `/planning` |
+| `flow-reviewer` | opus | Spec Mode で画面 DAG、Story Mode で Story 依存 DAG をレビュー (read-only) | `/planning` |
+| `ui-designer` | opus | HTML screens 生成 (layout-only、装飾禁止) | `/planning` Stage 3 |
+| `ui-design-reviewer` | opus | HTML 評価 + 決定論ゲート (read-only) | `/planning` Stage 3 |
+| **`contract-reviewer`** | opus | **(新)** Sprint Contract 検証 (atomicity / AC testability / Story 前進性 / tier metadata / KPI alignment) | `/generate` Step 3 |
+| `tester` | sonnet | テスト作成・実行 (フォーク context で red-test と verify-test 別実行) | `/red-test`, `/verify-test` |
+| `test-auditor` | opus | テスト品質監査 (報酬ハック検出、read-only) | `/audit-tests` |
+| `implementer` | sonnet | テストを通すソースコード実装 (テスト変更禁止) | `/implement` |
+| `ticket-executor` | opus | T1 用 AC 駆動実装 (削除・リファクタ・config) | `/generate` T1 分岐 |
+| `reviewer` | opus | コードレビュー (T3 のみ、read-only) | `/review-impl` |
+| `acceptance-tester` | opus | E2E + デザイン 4 軸評価 + Negative Testing | `/e2e-evaluate` |
+| **`post-mortem`** | opus | **(新)** sprint PASS 後に Gotcha 抽出、sha1 hash dedup で Layer 1 に append | `/generate` Step 5 T3 |
+
+---
 
 ## 典型的な使用例
 
-### パターン1: ゼロからアプリを作る（フルワークフロー）
+### パターン1: ゼロからアプリを作る (H-Consensus フロー)
 
 ```shell
-# 0. 設計 — Product Spec + AC + Implementation Checklist を生成
+# 0. 設計 — KPI → Spec → Story → (Screens) の 4 stage 収束
 /planning "タスク管理アプリを作りたい"
 
-# 1. Issue 作成 + ブランチ作成（Checklist の Feature ごと）
-/create-issue "Feature 1: ユーザー登録"
+# 1. 最初の Story を実装 (Sprint Contract 交渉 → tier 判定 → 実装 → 評価)
+/generate S-01
 
-# 2. TDD サイクル（内部で red-test → audit-tests → implement → verify-test）
-/tdd-cycle "Feature 1 の AC"
+# 2. 同じ Story の次 sprint、または別 Story
+/generate              # 引数なしで自動選択
+/generate S-02         # 明示指定
 
-# 3. ローカル検証
-/verify-local
+# 3. dry-run で Sprint Contract と tier 判定だけ確認したい時
+/generate S-03 --dry-run
 
-# 4. コミット
-/smart-commit
+# 4. 全 Story 完了後の E2E 評価
+/e2e-evaluate
 
-# 5. 2〜4 を全 Feature について繰り返す
+# === ここまで fully offline ===
 
-# 6. 全機能完了後、E2E 評価
-/e2e-evaluate "アプリ起動方法 + 全 AC リスト"
-
-# 7. PASS なら PR 作成
+# 5. (opt-in) team に共有
+/ticket-publish T-0001
 /pr-description
-
-# 8. PR コードレビュー（公式 code-review プラグインを優先、未インストール時はフォールバック）
 /pr-review
 ```
 
-### 推奨: 公式 code-review プラグインの併用
+### パターン2: 旧フロー (既存プロジェクト)
 
-`/pr-review` は公式 `code-review` プラグインを優先利用します（4エージェント並列レビュー + 信頼度スコアリング）。未インストールでも ccx-arsenal 独自の reviewer エージェントでフォールバック動作しますが、より堅牢なレビューのため公式プラグインの併用を推奨します:
-
-```shell
-claude plugin install code-review@claude-plugins-official
-```
-
-### パターン2: 既に仕様がある場合（途中から開始）
+既存の `.agent-core/tickets/T-XXXX.json` を持つプロジェクトは `/tdd-cycle` / `/ticket-cycle` が deprecated alias として動作します (1.3.0+)。新規プロジェクトへの移行は漸進的に。
 
 ```shell
-# Spec と AC が既にある場合、/planning をスキップして /create-issue から開始
-/create-issue "既存仕様から切り出した Feature"
-/tdd-cycle "AC"
-# ... 以降同じ
+# 旧フローは引き続き動く
+/create-ticket          # Spec eager 一括生成
+/tdd-cycle T-0001       # 従来 TDD レーン
+/ticket-cycle T-0002    # 従来 非TDDレーン
 ```
 
-### パターン3: 既存テストの監査
+### パターン3: 3 ヶ月毎の構造層 Gotcha レビュー
 
 ```shell
-# AC カバレッジと報酬ハックのみチェック
-/audit-tests "Acceptance Criteria..."
+# sprint が 10 件以上蓄積された後に実行
+/tier-matrix-review
+# → 実績から tier 判定ルールの改定案を提示 → HITL 承認で適用
 ```
 
-### パターン4: E2E 評価の ITERATE ループ
-
-```
-/e2e-evaluate → ITERATE（Round 1）
-  ↓ 修正指示
-/tdd-cycle [Iteration Mode で再発防止テスト付き修正]
-  ↓
-/e2e-evaluate → PASS / ITERATE（Round 2、最大3ラウンド）
-```
+---
 
 ## 設計思想
 
-### Self-Evaluation Bias の排除
+### 二重フィードバックループ (harness blog 準拠)
 
-実装者が自分で「動作確認」すると、無意識のうちに甘い判定になります。`agent-core` では:
+`/generate` は planner / generator / evaluator の 3 役を物理的な fork 境界で分離します (Anthropic blog で 20x 品質ゲインが実証された構成)。
 
-- **implementer はテストを変更できない**（テストファイル編集を禁止）
-- **tester はソースコードを変更できない**（テストを通すために実装を弄れない）
-- **acceptance-tester / reviewer / test-auditor は読み取り専用**（問題を指摘するだけ）
+- **Contract 交渉**: planner(Contract Mode) ↔ contract-reviewer (両方 fork)
+- **実装**: test-writer (tester fork) ≠ implementer (implementer fork) ← **TDD の物理的分離**
+- **評価**: evaluator (acceptance-tester fork) ≠ generator ← **skeptical 評価の物理的分離**
 
-### Anti-Bias Rules
+### Tiered Static Fork (H-Consensus)
 
-全評価者は冒頭に「懐疑性を強制するルール」を持ちます:
+fork 構成を sprint 中に動的変更せず、**sprint 開始時の tier 判定で静的確定**します。
+
+- **決定論判定**: `classify-tier.sh` が stdout で tier を出力、LLM 改変禁止
+- **コールドスタート**: 初期 20 sprint or post-mortem 10 件までは強制 T2
+- **tier 改定**: 3 ヶ月周期の `/tier-matrix-review` で HITL 承認 → 適用
+
+詳細は [Tier Matrix](#tier-matrix-決定論判定) を参照。
+
+### Gotcha 2 層学習
+
+- **Layer 1 (prompt 層)**: 全 agent/skill MD 末尾の `## Gotchas` セクション。post-mortem agent が sprint PASS 直後に sha1 8 桁 hash 完全一致で dedup し append
+- **Layer 2 (構造層)**: `.agent-core/tier-matrix.md` + `classify-tier.sh`。3 ヶ月周期で `/tier-matrix-review` が HITL 承認で更新
+
+Gotcha entry format:
+```
+- [HASH8] [YYYY-MM-DD] <事象>: <対処> (hits: N, source: T-XXXX)
+```
+
+### Anti-Bias Rules (全評価者に埋め込み)
 
 - 「動いているから OK」と判断しない
 - 疑わしきは FAIL / NEEDS_FIX
-- 問題を見つけることが仕事（褒めるモードに入らない）
+- 問題を見つけることが仕事 (褒めるモードに入らない)
 - エビデンスなき判定は許さない
 
-### Confidence レベル
+### 決定論ゲート (`!` 構文)
 
-全評価者の判定に `Confidence: HIGH / MEDIUM / LOW` を付与。LOW の場合は追加検証を推奨します。
+重要な連鎖ステップは `!command` で機械実行し、Claude の判断スキップを防ぎます。`/generate` の tier 判定や cold-start 判定は全て `!` 構文で shell script 出力を context 注入し、LLM 改変を禁止しています。
 
-### メタ評価（エビデンス検証）
+---
 
-オーケストレーター（`/tdd-cycle` / `/e2e-evaluate`）は評価者が PASS を返しても:
+## 変更履歴 (1.3.0)
 
-- Evidence 列が空の項目があれば受理しない
-- Negative Testing や Semantic Analysis が欠けていれば受理しない
-- Confidence: LOW なら追加検証を検討
+### 新規追加
+- **`/generate`** skill (H-Consensus Tiered Static Fork orchestrator)
+- **`/tier-matrix-review`** skill (3 ヶ月周期構造層 Gotcha HITL レビュー)
+- **`contract-reviewer`** agent (Sprint Contract 検証)
+- **`post-mortem`** agent (Gotcha 抽出、Allowed Write Paths 制約付き)
+- **`scripts/classify-tier.sh`** (決定論 tier 判定)
+- **`scripts/cold-start-check.sh`** (閾値判定)
+- 全 agent/skill MD に `## Gotchas` セクション追加
 
-評価者が手を抜いても検出できる二段構えになっています。
+### 変更
+- `/planning` を **4 stage 化** (KPI → Spec → Story → UI)、HITL ゲート 3-4 箇所
+- `planner` agent に **KPI Mode / Spec Mode / Story Mode** prompt 分岐
+- `spec-reviewer` / `flow-reviewer` に **Story Mode** 追加
 
-### 決定論ゲート（!構文）
+### Deprecated (後方互換のため存置)
+- `/create-ticket` (eager 生成、新フローは `/generate` の lazy)
+- `/tdd-cycle` (単発 TDD、新フローは `/generate` T2 分岐)
+- `/ticket-cycle` (非 TDD 単発、新フローは `/generate` T1 分岐)
 
-重要な連鎖ステップには `!command` 構文を使い、スキルローダーレベルで機械的に実行することで、Claude の判断スキップを防いでいます。「Claude の気分でスキップされる」事故を構造的に防ぐ設計です。
-
-#### `/pr-review` の決定論化
-
-PR レビューの「PR diff 取得 → 公式プラグイン試行 → フォールバック起動」を `!` 構文で固定:
-
-1. **PR 情報取得**: `` !`gh pr view` `` で PR 番号・タイトル・URL を必ず取得（決定論）
-2. **diff 取得**: `` !`gh pr diff` `` で diff を必ず取得（決定論）
-3. **公式プラグイン試行**: `` !`claude -p "/code-review"` `` でサブプロセスとして公式プラグインを呼出（決定論）
-4. **フォールバック起動**: シェル `||` で失敗時に `FALLBACK_TRIGGERED` を注入し、reviewer エージェントが即座に独自レビューに切り替え（決定論、1段）
-
-最終的なコメント投稿のみ reviewer エージェントの判断に依存しますが、必要なデータ（diff・PR 情報・公式試行結果）が全て事前注入されているため、データ欠落による失敗確率はゼロに近くなります。
-
-#### `/tdd-cycle` の決定論化
-
-TDD サイクルの最も重要な「テストファースト + 報酬ハック検出」を確実に実行するため、Phase 1 (RED) と Phase 1.5 (AUDIT) を `!` 構文で必ず実行します:
-
-1. **Phase 1 (RED)**: `` !`claude -p "/red-test ..."` `` でテスト作成を必ず実行（決定論）
-2. **Phase 1.5 (AUDIT 1回目)**: `` !`claude -p "/audit-tests ..."` `` で報酬ハック検出を必ず実行（決定論）
-3. **Phase 2 以降**: orchestrator が判定ロジックで進行（条件分岐とループ上限あり）
-
-これにより「Claude が AUDIT をスキップして弱いテストで実装を進める」事故が構造的に防げます。さらに全ループに明示的な上限（AUDIT NEEDS_IMPROVEMENT 最大3回、VERIFY FAIL 最大3回、SIMPLIFY 失敗 最大2回）が設定されており、暗黙の無限ループは存在しません。
+---
 
 ## 詳細ドキュメント
 
-より詳しい開発ガイドラインは [CLAUDE.md](./CLAUDE.md) を参照してください。
+開発ガイドラインは [CLAUDE.md](./CLAUDE.md) を参照してください。
+
+## 関連資料
+
+- [Anthropic: Harness Design for Long-Running Apps](https://www.anthropic.com/engineering/harness-design-long-running-apps) — 3 役 (planner/generator/evaluator) で 20x 品質ゲインの実証
