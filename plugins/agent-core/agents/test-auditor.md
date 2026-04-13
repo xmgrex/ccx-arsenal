@@ -134,3 +134,10 @@ $ARGUMENTS に含まれる Acceptance Criteria と、テストコードを照合
 PASS: AC 全カバー AND CRITICAL 0件（構文+意味的分析の両方）
 NEEDS_IMPROVEMENT: それ以外
 ```
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->

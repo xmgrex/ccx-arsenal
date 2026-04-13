@@ -26,6 +26,29 @@ git diff main..HEAD                # 全差分
 
 全コミットを読み、変更の全体像を把握する。
 
+### 1.5 関連チケットの解決（agent-core 特有）
+
+コミットメッセージから `Ticket: T-XXXX` trailer を探し、対応するローカル JSON チケットを解決する:
+
+```bash
+# コミット一覧から Ticket: trailer を抽出
+TICKET_IDS=$(git log main..HEAD --format="%b" | grep -oE 'Ticket: T-[0-9]+' | awk '{print $2}' | sort -u)
+
+# 各チケット JSON を読む
+for tid in $TICKET_IDS; do
+  if [ -f ".agent-core/tickets/${tid}.json" ]; then
+    cat ".agent-core/tickets/${tid}.json"
+  fi
+done
+```
+
+各チケットについて:
+
+- `github_issue_number` が set されていれば → PR 本文に `Fixes #<N>` を含める（GitHub 側で PR マージ時に issue 自動クローズ）
+- `github_issue_number` が null → PR 本文に `Ticket: <T-ID>` のみ含める（ローカルチケット参照、GitHub には issue なし）
+
+ブランチ名が `ticket-T-XXXX-...` パターンなら、そのチケット ID も別途確認する。
+
 ### 2. PR 作成
 
 ```bash
@@ -34,6 +57,14 @@ gh pr create --title "<summary>" --body "$(cat <<'EOF'
 
 **変更前**: <ユーザーから見た現状の動作を日常語で>
 **変更後**: <ユーザーから見た変更後の動作を日常語で>
+
+## 関連チケット
+
+<以下のいずれかを含める（Step 1.5 の解決結果に応じて）>
+
+- publish 済みチケット: `Fixes #<github_issue_number>` （マージで自動クローズ）
+- ローカルチケットのみ: `Ticket: <T-XXXX>` （GitHub issue 未作成、ローカル JSON が SoT）
+- 該当チケットなし: このセクションを省略
 
 ## 設計判断（なぜこうしたか）
 
@@ -108,3 +139,10 @@ claude plugin install code-review@claude-plugins-official
 ## Next
 
 → ユーザーレビュー（実装内容・設計判断）& マージ
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->

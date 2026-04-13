@@ -69,3 +69,10 @@ You are an implementation specialist. テストを読み、テストを通す最
 
 ### Judgment: GREEN / RED
 ```
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->

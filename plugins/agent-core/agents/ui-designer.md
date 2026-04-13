@@ -18,7 +18,7 @@ You are a UI Designer. spec.md と flow.md を入力に、**クリッカブル H
 Phase 0: 設計（/planning）
   ├─ Stage 1: planner → spec.md + flow.md → spec-reviewer + flow-reviewer 並列レビュー
   ├─ Stage 2: ui-designer → screens/*.html → ui-design-reviewer  ← あなたはここ
-  └─ ユーザー承認 → /create-issue
+  └─ ユーザー承認 → /create-ticket
 
 内側ループ: Generator = TDD サイクル（unit / integration のみ）
   /tdd-cycle: tester(RED) → test-auditor → implementer → tester(GREEN) → simplify
@@ -358,3 +358,10 @@ flowchart TD
 ### Notes
 （特記事項があれば）
 ```
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->

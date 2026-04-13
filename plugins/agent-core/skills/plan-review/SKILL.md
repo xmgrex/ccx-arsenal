@@ -154,7 +154,7 @@ fi
 
 ### Step 3 — 終了（ユーザー承認ゲートなし）
 
-レポート出力後は終了する。`/create-issue` への自動誘導はしない。ユーザーが結果を見て次の行動（手動修正 / `/planning` 再ループ / `/create-issue` 進行）を自分で選ぶ。
+レポート出力後は終了する。`/create-ticket` への自動誘導はしない。ユーザーが結果を見て次の行動（手動修正 / `/planning` 再ループ / `/create-ticket` 進行）を自分で選ぶ。
 
 ---
 
@@ -170,4 +170,11 @@ fi
 ## Next
 
 - NEEDS_FIX → spec/flow/screens を手動編集 or `/planning` で再ループ → `/plan-review` で再検証
-- OK → `/create-issue {SPEC_FILE}` で Issue 化（screens がある場合は `open {SCREENS_DIR}/index.html` で視覚確認も推奨）
+- OK → `/create-ticket {SPEC_FILE}` でローカルチケット化（screens がある場合は `open {SCREENS_DIR}/index.html` で視覚確認も推奨）
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->

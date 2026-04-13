@@ -54,3 +54,10 @@ NEEDS_IMPROVEMENT: AC 未カバーあり OR CRITICAL 1件以上
 ### Improvement Instructions（NEEDS_IMPROVEMENT の場合）
 1. [具体的な修正指示: 何のテストを追加/強化すべきか]
 ```
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->

@@ -1,10 +1,10 @@
 ---
 name: planning
-description: "アプリ開発の起点。ユーザーの要求から Product Spec + Flow.md + クリッカブル HTML screens を生成し、二段階収束ループ（Stage 1: spec/flow 並列レビュー / Stage 2: UI design レビュー、各最大3ラウンド）でレビュー収束させる。ユーザー承認後に Issue 化へ進む。Trigger: アプリ作って, 〜を作りたい, 設計して, spec, 仕様"
+description: "アプリ開発の起点。ユーザーの要求から KPI → Spec → Story → (UI screens) の 4 段収束レビューループで設計ドキュメント一式を生成する。Ticket は作らず、/generate が lazy materialization する。Trigger: アプリ作って, 〜を作りたい, 設計して, spec, 仕様, 企画"
 disable-model-invocation: false
 ---
 
-## Planning — Spec 生成 + 二段階収束レビューループ
+## Planning — KPI/Spec/Story/UI の 4 段収束レビューループ
 
 ### ユーザーの要求
 
@@ -20,33 +20,157 @@ specs ディレクトリ確保: !`mkdir -p .agent-core/specs && echo "ready"`
 
 ### 指示（main Claude orchestrator 版）
 
-あなたは `/planning` の orchestrator です。以下の**二段階収束ループ**を実行せよ。
+あなたは `/planning` の orchestrator です。以下の **4 段収束ループ**を実行せよ。
 
 **全体構造**:
-- **Stage 1**: spec.md + flow.md の収束（最大 3 ラウンド、spec-reviewer + flow-reviewer 並列）
-- **Stage 2**: HTML screens の収束（最大 3 ラウンド、ui-designer + ui-design-reviewer、UI アプリのみ）
-- 両 Stage 完了 → ユーザー承認ゲート → `/create-issue`
+- **Stage 0**: KPI.md の収束（最大 3 ラウンド、planner(KPI Mode) + spec-reviewer(KPI Mode)）
+- **Stage 1**: spec.md + flow.md の収束（最大 3 ラウンド、planner(Spec Mode) + spec-reviewer + flow-reviewer 並列）
+- **Stage 2**: story.md の収束（最大 3 ラウンド、planner(Story Mode) + spec-reviewer(Story Mode) + flow-reviewer(Story Mode) 並列）
+- **Stage 3**: HTML screens の収束（最大 3 ラウンド、ui-designer + ui-design-reviewer、UI アプリのみ）
+- 全 Stage 完了 → ユーザー承認ゲート → **`/generate` で Sprint Contract 単位に lazy ticket 化**
 
-**重要原則（両 Stage 共通）**:
+**重要原則（全 Stage 共通）**:
 - 各ラウンドの全 agent は必ず**新規 Agent コール**で spawn する（kill-and-spawn / fresh context）
 - Round 2 以降の planner / ui-designer は `Revise Mode` で起動（既存ファイルを差分修正）
 - 並列可能な reviewer は**同一メッセージ内で並列 spawn**（Agent ツールを1メッセージで複数 call）
 - main context を肥大させないため、各 agent 出力から必要な要素のみ抽出する（artifact 本文は保持せずパスのみ）
+- **Doc 階層の依存**: KPI → Spec → Story → (UI) の順に上流が下流を制約する。前 stage 収束なしに次 stage に進んではならない
+- **Ticket は作らない**: `/create-ticket` は呼ばない。Ticket は `/generate` が Sprint Contract 交渉時に 1 つずつ lazy 生成する
+
+---
+
+## Stage 0: KPI 収束ループ
+
+**目的**: Spec より 1 段上の抽象で、プロジェクトの**成功定義**と**撤退条件**を確定する。KPI.md は後段 Spec/Story の意思決定ガードレールとして機能する。
+
+#### Stage 0 - Round 1: 初回生成
+
+**Step 0-1-1 — planner(KPI Mode) を fresh spawn**:
+
+Agent ツールで `subagent_type: planner` を呼ぶ。prompt に以下を含める:
+
+```
+MODE: KPI
+
+以下の要求から KPI (成功定義 + 撤退条件 + 対象ユーザー + Non-Goals) を生成せよ:
+
+$ARGUMENTS
+
+## Workflow Context
+あなたは agent-core の Phase 0 Stage 0 を担当する。このステップでは実装詳細・技術スタック・UI の話を一切書かない。「何を達成するか」のみ記述する。
+
+詳細は planner.md の `## KPI Mode` セクションを参照せよ。
+
+## 必須要件
+- KPI を `.agent-core/specs/{slug}-kpi.md` に Write で保存する (slug は App Name の kebab-case)
+- 保存後、以下を返す:
+  - KPI_PATH: 保存先のフルパス
+  - APP_SLUG: slug 文字列
+```
+
+planner の返答から `KPI_PATH` と `APP_SLUG` を抽出する。
+
+**Step 0-1-2 — spec-reviewer(KPI Mode) を fresh spawn**:
+
+Agent ツールで `subagent_type: spec-reviewer` を単独呼び出し (flow-reviewer は Stage 0 では使わない):
+
+```
+MODE: KPI
+
+以下の KPI をレビューせよ: {KPI_PATH}
+
+spec-reviewer.md の `## KPI Mode Rules` に従って評価すること (評価軸 KPI-1 〜 KPI-5)。Spec Mode の評価軸 1-6 は適用しない。
+```
+
+**Step 0-1-3 — 判定集約**:
+
+spec-reviewer の出力から以下のみ抽出:
+- `Judgment` 行 (OK / NEEDS_FIX)
+- `Issues` (Critical/Important のみ)
+- `### Fix Instructions (for planner)` 全文
+
+判定ロジック:
+- `OK` → **Stage 1 へ**
+- `NEEDS_FIX` → Fix Instructions 集約 → **Stage 0 - Round 2 へ**
+
+#### Stage 0 - Round 2 / Round 3: Revise Mode
+
+**Step 0-N-1 — planner を KPI Revise Mode で fresh spawn**:
+
+```
+MODE: KPI
+Revise Mode.
+
+PREVIOUS KPI PATH: {KPI_PATH}
+
+FIX INSTRUCTIONS:
+（Round N-1 の spec-reviewer から集約した Fix Instructions を全文貼り付ける）
+
+指示:
+- 前 KPI.md を Read して既存内容を確認する
+- Fix Instructions に従って該当箇所のみ Edit で修正する
+- ゼロから再生成はしない
+- 同じパスに Write で上書き保存
+- 変更サマリーを short list で返す
+```
+
+**Step 0-N-2 — spec-reviewer(KPI Mode) 再 spawn**: Step 0-1-2 と同じ手順。
+
+**Step 0-N-3 — 判定**:
+- OK → **Stage 0 - Step 0-G: HITL 承認ゲート へ**
+- NEEDS_FIX かつ N < 3 → **Stage 0 - Round N+1 へ**
+- NEEDS_FIX かつ N == 3 → **Step 5 (エスカレーション) へ**
+
+#### Step 0-G: Stage 0 承認ゲート (HITL)
+
+Stage 0 収束後、次 Stage に進む前にユーザー確認を取る:
+
+```
+✅ Stage 0 (KPI) 収束しました (Round {N}/3)
+
+📄 KPI: {KPI_PATH}
+
+主要な Success Metrics:
+- {metric 1}
+- {metric 2}
+- {metric 3}
+
+主要な Exit Criteria:
+- {撤退条件 1}
+- {撤退条件 2}
+
+Non-Goals:
+- {やらないこと 1}
+- {やらないこと 2}
+
+この KPI で Stage 1 (Spec 生成) に進んでよろしいですか？
+(修正したい場合は具体的な指示をください)
+```
+
+ユーザー承認を得てから Stage 1 へ。
 
 ---
 
 ## Stage 1: Spec/Flow 収束ループ
 
+**目的**: Stage 0 の KPI を達成する Feature 群と画面遷移を定義する。
+
 #### Round 1: 初回生成
 
-**Step 1-1 — planner を fresh spawn**:
+**Step 1-1 — planner(Spec Mode) を fresh spawn**:
 
 Agent ツールで `subagent_type: planner` を呼ぶ。prompt には以下を含める:
 
 ```
-以下の要求から Product Spec を生成せよ:
+MODE: SPEC
+
+以下の要求から Product Spec を生成せよ。KPI.md が既に承認済みなので、Feature は KPI Success Metrics を達成する手段として定義すること:
 
 $ARGUMENTS
+
+## KPI Reference
+KPI_PATH: {KPI_PATH}
+→ Read してから Feature 定義を始めること。KPI と矛盾する Feature は書かない。
 
 ## Workflow Context（agent-core pipeline）
 
@@ -134,19 +258,132 @@ Phase 0 のスコープ境界を再確認せよ:
 **Step 2-2 — 並列レビュー spawn**: Round 1 Step 1-2 と同じ手順で spec-reviewer と flow-reviewer を並列 spawn。
 
 **Step 2-3 — 判定集約**:
-- 収束成功 → **Stage 2 へ**（IS_UI_APP=true）または **Step 4 へ**（IS_UI_APP=false）
+- 収束成功 → **Step 1-G: Stage 1 HITL ゲートへ**
 - NEEDS_FIX AND ラウンド N < 3 → **Round N+1 へ**
 - NEEDS_FIX AND ラウンド N == 3 → **Step 5（エスカレーション）へ**
 
+#### Step 1-G: Stage 1 承認ゲート (HITL)
+
+Stage 1 収束後、Stage 2 (Story) に進む前にユーザー確認:
+
+```
+✅ Stage 1 (Spec/Flow) 収束しました (Round {N}/3)
+
+📄 Spec: {SPEC_PATH}
+🔀 Flow: {FLOW_PATH} (UI アプリの場合)
+
+主要 Feature:
+- {Feature 1 name}
+- {Feature 2 name}
+- {Feature 3 name}
+
+この Spec で Stage 2 (Story 分割) に進んでよろしいですか？
+```
+
+ユーザー承認を得てから Stage 2 へ。
+
 ---
 
-## Stage 2: UI Design 収束ループ（UI アプリのみ）
+## Stage 2: Story 収束ループ
 
-**前提**: Stage 1 が収束成功 AND `IS_UI_APP=true` AND `FLOW_PATH` が存在する場合のみ実行。それ以外（CLI/API/ライブラリ）は **Stage 2 全体をスキップ**して Step 4 へ進む。
+**目的**: Spec の Feature を **Value 単位の Story** に再集約する。各 Story は 3-10 sprint 規模、lazy ticket 化の単位となる。
+
+#### Stage 2 - Round 1: 初回生成
+
+**Step 2S-1-1 — planner(Story Mode) を fresh spawn**:
+
+```
+MODE: STORY
+
+前段 KPI と Spec を参照して、Feature を Value 単位の Story に再集約せよ:
+
+KPI_PATH: {KPI_PATH}
+SPEC_PATH: {SPEC_PATH}
+FLOW_PATH: {FLOW_PATH} (存在する場合)
+
+## 指示
+- KPI.md と spec.md を Read して前提を把握
+- planner.md の `## Story Mode` セクションに従って story.md を生成
+- 各 Story は 3-10 sprint 規模、KPI Contribution を必須記載
+- Story → Feature Mapping 表を末尾に付ける
+- `.agent-core/specs/{slug}-story.md` に Write で保存し、STORY_PATH を返せ
+```
+
+planner の返答から `STORY_PATH` を抽出する。
+
+**Step 2S-1-2 — 並列レビュー spawn (spec-reviewer Story Mode + flow-reviewer Story Mode)**:
+
+単一メッセージで 2 つの Agent call を並列発行:
+
+1. Agent(`subagent_type: spec-reviewer`, prompt: `MODE: STORY\n\n story.md をレビューせよ: {STORY_PATH}\nKPI_PATH: {KPI_PATH}\nSPEC_PATH: {SPEC_PATH}\n\nspec-reviewer.md の Story Mode Rules に従え (STORY-1 〜 STORY-6)。`)
+2. Agent(`subagent_type: flow-reviewer`, prompt: `MODE: STORY\n\n story.md の依存 DAG をレビューせよ: {STORY_PATH}\nKPI_PATH: {KPI_PATH}\nSPEC_PATH: {SPEC_PATH}\n\nflow-reviewer.md の Story Mode Rules に従え (STORY-DAG-1 〜 STORY-DAG-5)。`)
+
+**Step 2S-1-3 — 判定集約**:
+
+両 reviewer の Judgment / Issues / Fix Instructions を抽出:
+- 両方 `OK` → **Step 2S-G: Stage 2 HITL ゲートへ**
+- いずれか `NEEDS_FIX` → Fix Instructions 集約 → **Stage 2 - Round 2 へ**
+
+#### Stage 2 - Round 2 / Round 3: Revise Mode
+
+**Step 2S-N-1 — planner(Story Mode) を Revise で fresh spawn**:
+
+```
+MODE: STORY
+Revise Mode.
+
+PREVIOUS STORY PATH: {STORY_PATH}
+KPI_PATH: {KPI_PATH}
+SPEC_PATH: {SPEC_PATH}
+
+FIX INSTRUCTIONS:
+（Round N-1 の spec-reviewer + flow-reviewer から集約した Fix Instructions を全文貼り付ける）
+
+指示:
+- 前 story.md を Read
+- Fix Instructions に従って該当箇所のみ Edit
+- 循環依存を発生させない
+- 同じパスに上書き保存
+- 変更サマリーを返す
+```
+
+**Step 2S-N-2 — 並列レビュー spawn**: Step 2S-1-2 と同じ手順。
+
+**Step 2S-N-3 — 判定**:
+- 両方 OK → **Step 2S-G: Stage 2 HITL ゲートへ**
+- NEEDS_FIX かつ N < 3 → **Stage 2 - Round N+1 へ**
+- NEEDS_FIX かつ N == 3 → **Step 5 (エスカレーション) へ**
+
+#### Step 2S-G: Stage 2 承認ゲート (HITL)
+
+```
+✅ Stage 2 (Story) 収束しました (Round {N}/3)
+
+📄 Story: {STORY_PATH}
+
+Story 一覧:
+- S-01: {Story 1 title} ({expected_sprints} sprint, depends on: none)
+- S-02: {Story 2 title} ({expected_sprints} sprint, depends on: S-01)
+- S-03: {Story 3 title} ({expected_sprints} sprint, depends on: S-01)
+
+推奨実行順序:
+1. S-01 → 2. S-02 (or S-03 parallel) → 3. S-03
+
+この Story 分割で Stage 3 (UI design) に進んでよろしいですか？
+(UI アプリでない場合は Stage 3 をスキップして承認ゲートへ)
+```
+
+ユーザー承認を得てから Stage 3 (UI) へ、または IS_UI_APP=false なら Step 4 へ。
+
+---
+
+## Stage 3: UI Design 収束ループ（UI アプリのみ）
+
+**前提**: Stage 0/1/2 が全て収束成功 AND `IS_UI_APP=true` AND `FLOW_PATH` が存在する場合のみ実行。それ以外（CLI/API/ライブラリ）は **Stage 3 全体をスキップ**して Step 4 へ進む。
 
 `SCREENS_DIR` を `${SPEC_PATH%-spec.md}-screens` で導出（例: `.agent-core/specs/todo-spec.md` → `.agent-core/specs/todo-screens`）。
 
-#### Stage 2 - Round 1: HTML 初回生成
+#### Stage 3 - Round 1: HTML 初回生成
 
 **Step S2-1-1 — ui-designer を fresh spawn**:
 
@@ -161,7 +398,7 @@ SCREENS_DIR: {SCREENS_DIR}
 
 ## Workflow Context
 
-あなたは agent-core の Phase 0 Stage 2。screens HTML は**構造リファレンスのみ**で、視覚デザインでもテスト対象でもない。後段 acceptance-tester（外側ループ）は agent-browser / mobile-mcp / Bash で独立に E2E 実行する。
+あなたは agent-core の Phase 0 Stage 3。screens HTML は**構造リファレンスのみ**で、視覚デザインでもテスト対象でもない。後段 acceptance-tester（外側ループ）は agent-browser / mobile-mcp / Bash で独立に E2E 実行する。
 
 スコープ境界（厳守）:
 - テストフレームワーク（Playwright / Cypress / Testing Library 等）の <script> や import を HTML に入れない
@@ -257,11 +494,11 @@ ui-design-reviewer の出力から:
 - `### Fix Instructions (for ui-designer)` セクション全文
 
 判定ロジック:
-- `OK` → Stage 2 脱出 → **Step 4 へ**
-- `NEEDS_FIX` → Fix Instructions を集約 → **Stage 2 - Round 2 へ**
-- `SKIPPED` → Stage 2 脱出（想定外だがエラー扱いせず Step 4 へ）
+- `OK` → Stage 3 脱出 → **Step 4 へ**
+- `NEEDS_FIX` → Fix Instructions を集約 → **Stage 3 - Round 2 へ**
+- `SKIPPED` → Stage 3 脱出（想定外だがエラー扱いせず Step 4 へ）
 
-#### Stage 2 - Round 2 / Round 3: Revise Mode
+#### Stage 3 - Round 2 / Round 3: Revise Mode
 
 **Step S2-N-1 — ui-designer を Revise Mode で fresh spawn**:
 
@@ -273,7 +510,7 @@ FLOW_PATH: {FLOW_PATH}
 SCREENS_DIR: {SCREENS_DIR}
 
 FIX_INSTRUCTIONS:
-（Stage 2 - Round N-1 の ui-design-reviewer から集約した Fix Instructions を全文貼り付ける）
+（Stage 3 - Round N-1 の ui-design-reviewer から集約した Fix Instructions を全文貼り付ける）
 
 指示:
 - 既存 HTML ファイルを Read で読む
@@ -290,46 +527,80 @@ FIX_INSTRUCTIONS:
 
 **Step S2-N-4 — 判定**:
 - OK → **Step 4 へ**
-- NEEDS_FIX かつ N < 3 → **Stage 2 - Round N+1 へ**
-- NEEDS_FIX かつ N == 3 → **Step 5（エスカレーション）へ**（Stage 2 専用エスカレーション）
+- NEEDS_FIX かつ N < 3 → **Stage 3 - Round N+1 へ**
+- NEEDS_FIX かつ N == 3 → **Step 5（エスカレーション）へ**（Stage 3 専用エスカレーション）
 
 ---
 
-#### Step 4 — ユーザー承認ゲート（収束成功）
+#### Step 4 — 最終承認ゲート (全 Stage 収束完了)
 
-以下を提示してユーザーに確認を取る:
+4 Stage 全て収束した後、`/generate` に進む前に最終確認を取る:
 
 ```
-✅ レビュー収束しました
-   Stage 1 (spec/flow): Round {N1} / 3
-   Stage 2 (UI design): Round {N2} / 3 （UI アプリのみ / CLI/API なら "skipped"）
+✅ Phase 0 (設計) 完了しました
 
-📄 Spec: {SPEC_PATH}
-🔀 Flow: {FLOW_PATH} （UI アプリのみ / CLI/API 時は "N/A（CLI/API アプリ）"）
-🎨 Screens: {SCREENS_DIR}/index.html （UI アプリのみ）
+Stage 収束状況:
+   Stage 0 (KPI):      Round {N0} / 3 ✅
+   Stage 1 (Spec/Flow): Round {N1} / 3 ✅
+   Stage 2 (Story):    Round {N2} / 3 ✅
+   Stage 3 (UI Design): Round {N3} / 3 ✅ (UI アプリのみ / CLI/API なら "skipped")
+
+📄 Artifacts:
+   KPI:     {KPI_PATH}
+   Spec:    {SPEC_PATH}
+   Story:   {STORY_PATH}
+   Flow:    {FLOW_PATH} (UI アプリのみ)
+   Screens: {SCREENS_DIR}/index.html (UI アプリのみ)
 
 📊 最終 judgment:
-- spec-reviewer: OK (Confidence: {level})
-- flow-reviewer: OK / SKIPPED (Confidence: {level})
-- ui-design-reviewer: OK / SKIPPED (Confidence: {level})
+- Stage 0 spec-reviewer (KPI):   OK (Confidence: {level})
+- Stage 1 spec-reviewer + flow-reviewer: OK
+- Stage 2 spec-reviewer + flow-reviewer (Story): OK
+- Stage 3 ui-design-reviewer:    OK / SKIPPED
 
-🌐 ブラウザで触れる spec を確認:
+🌐 ブラウザで触れる設計を確認 (UI アプリのみ):
    open {SCREENS_DIR}/index.html
-   （macOS / Linux なら xdg-open / Windows なら start）
-   ※ UI アプリの場合のみ。クリックで画面間を遷移して導線を体感してください
 
-次のステップ: `/create-issue {SPEC_PATH}` で Phase 1 の Feature を Issue 化します。
+📌 次のステップ:
+   /generate S-01    ← 1 つ目の Story から Sprint Contract 交渉を開始
+                       Ticket は 1 sprint ずつ lazy 生成されます
 
 進めてよろしいですか？
 ```
 
-**重要**: ユーザーの明示承認なしに `/create-issue` を自動実行してはならない。CLI/API の場合は「ブラウザで触れる spec」セクションを省略する。
+**重要**:
+- ユーザーの明示承認なしに `/generate` を自動実行してはならない
+- CLI/API の場合は「ブラウザで触れる設計」セクションを省略する
+- `/create-ticket` は呼ばない (lazy materialization のため)
 
 ---
 
 #### Step 5 — エスカレーション（3ラウンドで収束せず）
 
-どの Stage で収束失敗したかに応じて以下を提示する:
+どの Stage で収束失敗したかに応じて以下を提示する。**Stage 0 (KPI) または Stage 2 (Story) 失敗の場合も同様の形式**でユーザーに選択肢を提示すること (どの artifact で失敗したかを明示):
+
+**Stage 0 (KPI) 失敗の場合**:
+```
+⚠️ Stage 0 (KPI) が 3 ラウンドで収束しませんでした。
+
+📄 最終 KPI: {KPI_PATH}
+
+📊 全ラウンド history:
+- Round 1: {spec-reviewer judgment}
+- Round 2: {spec-reviewer judgment}
+- Round 3: {spec-reviewer judgment}
+
+❌ 未解決の指摘 (Round 3 最終):
+{spec-reviewer Issues (KPI-1 〜 KPI-5 のどれで失敗したか)}
+
+選択肢:
+1. KPI.md を手動で修正する → 再度 /planning で Stage 0 から
+2. 追加の修正指示をもらって再ループ
+3. 現状で承認し Stage 1 に進む (自己責任)
+4. 中止する
+
+どれにしますか？
+```
 
 **Stage 1 失敗の場合**:
 ```
@@ -356,16 +627,44 @@ FIX_INSTRUCTIONS:
 どれにしますか？
 ```
 
-**Stage 2 失敗の場合**:
+**Stage 2 (Story) 失敗の場合**:
 ```
-⚠️ Stage 2 (UI design) が 3 ラウンドで収束しませんでした。
-※ Stage 1 (spec/flow) は収束済みです。
+⚠️ Stage 2 (Story) が 3 ラウンドで収束しませんでした。
+※ Stage 0/1 (KPI/Spec) は収束済みです。
 
+📄 KPI: {KPI_PATH} ✅
 📄 Spec: {SPEC_PATH} ✅
+📄 Story: {STORY_PATH} ❌
+
+📊 全ラウンド history:
+- Round 1: {spec-reviewer + flow-reviewer judgment}
+- Round 2: {judgment}
+- Round 3: {judgment}
+
+❌ 未解決の指摘 (Round 3 最終):
+{Story Mode Issues (STORY-1〜STORY-6 / STORY-DAG-1〜STORY-DAG-5 のどれで失敗したか)}
+
+選択肢:
+1. Story.md を手動で修正する → `/plan-review` で再検証
+2. 追加の修正指示をもらって Stage 2 を再ループ
+3. 現状で承認し Stage 3 (UI) もしくは最終承認ゲートへ進む (自己責任)
+4. 中止する
+
+どれにしますか？
+```
+
+**Stage 3 (UI design) 失敗の場合**:
+```
+⚠️ Stage 3 (UI design) が 3 ラウンドで収束しませんでした。
+※ Stage 0/1/2 (KPI/Spec/Story) は収束済みです。
+
+📄 KPI: {KPI_PATH} ✅
+📄 Spec: {SPEC_PATH} ✅
+📄 Story: {STORY_PATH} ✅
 🔀 Flow: {FLOW_PATH} ✅
 🎨 Screens: {SCREENS_DIR}/ ❌
 
-📊 Stage 2 全ラウンド history:
+📊 Stage 3 全ラウンド history:
 - Round 1: {ui-design judgment}
 - Round 2: {ui-design judgment}
 - Round 3: {ui-design judgment}
@@ -375,9 +674,9 @@ FIX_INSTRUCTIONS:
 
 選択肢:
 1. screens を手動修正 → `/plan-review` で再検証
-2. 追加の修正指示をもらって Stage 2 を再ループ
-3. 現状で承認し /create-issue に進む（自己責任）
-4. screens を破棄して spec/flow だけで /create-issue に進む
+2. 追加の修正指示をもらって Stage 3 を再ループ
+3. 現状で承認し /generate に進む（自己責任）
+4. screens を破棄して KPI/Spec/Story だけで /generate に進む
 5. 中止する
 
 どれにしますか？
@@ -387,13 +686,15 @@ FIX_INSTRUCTIONS:
 
 ### ファイル保存ルール
 
-| Artifact | パス | 責務 |
-|----------|------|------|
-| Spec | `.agent-core/specs/{slug}-spec.md` | planner |
-| Flow | `.agent-core/specs/{slug}-flow.md`（UI アプリのみ） | planner |
-| Screens dir | `.agent-core/specs/{slug}-screens/` | ui-designer |
-| Index | `.agent-core/specs/{slug}-screens/index.html` | ui-designer |
-| Per-screen HTML | `.agent-core/specs/{slug}-screens/{screen-id}.html` | ui-designer |
+| Artifact | パス | 責務 | Stage |
+|----------|------|------|-------|
+| KPI | `.agent-core/specs/{slug}-kpi.md` | planner(KPI Mode) | 0 |
+| Spec | `.agent-core/specs/{slug}-spec.md` | planner(Spec Mode) | 1 |
+| Flow | `.agent-core/specs/{slug}-flow.md`（UI アプリのみ） | planner(Spec Mode) | 1 |
+| Story | `.agent-core/specs/{slug}-story.md` | planner(Story Mode) | 2 |
+| Screens dir | `.agent-core/specs/{slug}-screens/` | ui-designer | 3 |
+| Index | `.agent-core/specs/{slug}-screens/index.html` | ui-designer | 3 |
+| Per-screen HTML | `.agent-core/specs/{slug}-screens/{screen-id}.html` | ui-designer | 3 |
 
 - slug: App Name を kebab-case に変換（小文字、記号は `-` に）
 - 同名ファイルが既存でも上書き確認なし（Revise Mode 前提）
@@ -402,21 +703,31 @@ FIX_INSTRUCTIONS:
 ### コンテキスト肥大化対策（main の責務）
 
 各ラウンドで main context に保持するもの:
-- ✅ SPEC_PATH / FLOW_PATH / SCREENS_DIR（文字列）
+- ✅ KPI_PATH / SPEC_PATH / FLOW_PATH / STORY_PATH / SCREENS_DIR（文字列）
 - ✅ 各 reviewer の Judgment 行
 - ✅ 各 reviewer の Fix Instructions セクション
-- ✅ DETERMINISTIC_CHECK_RESULT（Stage 2 のリンク整合性チェック出力）
-- ❌ spec / flow / HTML 本文（agent が Read で読むのでディスク経由、main は保持不要）
+- ✅ DETERMINISTIC_CHECK_RESULT（Stage 3 のリンク整合性チェック出力）
+- ❌ KPI / Spec / Story / flow / HTML 本文（agent が Read で読むのでディスク経由、main は保持不要）
 - ❌ reviewer 出力の冗長セクション（Anti-Bias 説明部分等）
 
-両 Stage 計 6 ラウンドまで走らせても main の追加使用量を 25k tokens 以内に抑える。
+4 Stage 計 12 ラウンドまで走らせても main の追加使用量を 40k tokens 以内に抑える。
 
 ---
 
 ## Next
 
-→ ユーザー承認後: `/create-issue {SPEC_PATH}` で Phase 1 の Feature を一括 Issue 化
-→ Issue 化後: `/tdd-cycle` で Implementation Checklist を1つずつ消化
-→ 全機能完了後: `/e2e-evaluate` で受け入れテスト
+→ ユーザー承認後: `/generate S-01` で 1 つ目の Story から Sprint Contract 交渉を開始
+   - Ticket は Sprint Contract 合意時に 1 つずつ lazy 生成される
+   - `/generate --dry-run S-01` で Sprint Contract 提案 + tier 判定のみ確認可能
+→ Story 完了後: 次 Story へ (`/generate S-02`)
+→ 全 Story 完了後: `/e2e-evaluate` で受け入れテスト
+→ team 共有時 (opt-in): `/ticket-publish <T-ID>` → `/pr-description` → `/pr-review`
 
-手動で spec を再レビューしたい場合: `/plan-review {SPEC_PATH}` （収束ループなしでレビューのみ）
+手動で各 doc を再レビューしたい場合: `/plan-review {PATH}` （収束ループなしでレビューのみ）
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->

@@ -39,3 +39,10 @@ Total: [N] tests, Passed: [N], Failed: [N]
 |---------|----------|------------|
 | [test_name] | [エラーメッセージ] | [考えられる原因と修正方向] |
 ```
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->

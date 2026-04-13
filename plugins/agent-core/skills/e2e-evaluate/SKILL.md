@@ -83,3 +83,10 @@ acceptance-tester への指示:
 
 → PASS: `/pr-description` で PR 作成
 → ITERATE: 修正指示に基づいて `/tdd-cycle` で修正 → 再度 `/e2e-evaluate`（最大3ラウンド）
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->

@@ -80,3 +80,10 @@ git status              # ワーキングツリーがクリーンか確認
 ## Next
 
 → 次の機能があれば `/tdd-cycle`、全機能完了なら `/e2e-evaluate` で E2E + デザイン評価
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->

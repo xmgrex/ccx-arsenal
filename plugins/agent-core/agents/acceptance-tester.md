@@ -152,3 +152,10 @@ PASS を出す前に:
 
 ### Verdict: PASS / ITERATE (Confidence: HIGH/MEDIUM/LOW)
 ```
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->

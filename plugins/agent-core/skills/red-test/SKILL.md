@@ -45,3 +45,10 @@ $ARGUMENTS
 ### Judgment: RED（全テスト失敗を確認）
 Total: [N] tests, Failed: [N]
 ```
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->

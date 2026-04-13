@@ -81,3 +81,10 @@ Verdict が FAIL の場合、問題の詳細と修正の方向性を提示する
 ## Next
 
 → `/smart-commit` で検証済みコミット
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->

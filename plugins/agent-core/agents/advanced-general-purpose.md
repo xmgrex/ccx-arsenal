@@ -28,3 +28,10 @@ You are an advanced general-purpose AI assistant powered by Claude Opus 4.5.
 - Deep codebase analysis
 - Research requiring synthesis of multiple sources
 - Any task where quality matters more than speed
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->

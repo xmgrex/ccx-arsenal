@@ -5,6 +5,14 @@ description: "RED-GREEN-REFACTOR オーケストレーター。メイン Claude 
 
 # TDD Cycle — Main Claude Orchestrator 版
 
+> ⚠️ **DEPRECATED (1.3.0+)** — 新規プロジェクトでは `/generate <story-id>` を推奨します。
+>
+> H-Consensus モデルでは、`/tdd-cycle` と `/ticket-cycle` の 2 レーンは `/generate` に統合されました。`/generate` の **T2 (medium tier)** 分岐は本スキルと同等の RED → IMPLEMENT → VERIFY フローを実行し、**T3 (high tier)** ではさらに test-auditor と review-impl が追加で fork されます。
+>
+> このスキルは **既存プロジェクトの後方互換のためのみ**に残存しています。単発で TDD サイクルだけ回したい場合 (Sprint Contract 交渉を経由せずに) は引き続き利用可能です。
+>
+> 新規プロジェクトでは `/planning` → `/generate <story-id>` のフローに切り替えてください。
+
 ## Usage
 
 ```
@@ -236,3 +244,10 @@ acceptance-tester やレビューから修正指示を受けた場合の手順:
 ## Next
 
 → `/verify-local` → `/smart-commit` → 次の機能があれば `/tdd-cycle`、全機能完了なら `/e2e-evaluate`
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->

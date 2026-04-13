@@ -41,3 +41,10 @@ $ARGUMENTS
 |----------|-----------|---------|--------|
 | Critical/Important/Minor | [path:line] | [何が問題か] | [どう直すか] |
 ```
+
+---
+
+## Gotchas
+
+<\!-- post-mortem agent appends entries here -->
+<\!-- Format: - [HASH8] [YYYY-MM-DD] <event>: <action> (hits: N, source: T-XXXX) -->
