@@ -87,6 +87,10 @@ story_progress: "Story S-02 の DoD のうち、この sprint で X が達成さ
 
 **1 Sprint Contract = 1 sprint = 1 PR 相当**。以下は**即 NEEDS_FIX**:
 
+> ℹ️ 「1 sprint = 1 PR 相当」は作業単位であり時間枠ではない。
+> 詳細定義の SSoT は planner.md「Sprint 用語の定義」セクション参照。
+> sprint を週・日・月に換算することは Anti-Bias 違反として禁止される。
+
 - scope が 4 項目以上 → 分割候補 (3 以下が理想、例外時は Fix Instructions で理由を書けと指示)
 - estimated_sprints が 2 以上 → 定義上 NG (1 Contract = 1 sprint)
 - scope 内に「と、ついでに〜」「また〜も」等の**抱き合わせ表現**が混入

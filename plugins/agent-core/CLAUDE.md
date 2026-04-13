@@ -211,6 +211,8 @@ De-dup:
 - 設計・チケット化はユーザー承認を挟む
 - 勝手にマージ・push しない
 - **バイアスなき品質検証**: 常にレビューは kill して spawn しながら進める
+- **spec-reviewer.md / flow-reviewer.md の Anti-Bias Rules は共通仕様**: 特に「Sprint セマンティクス防衛」3 ルール (sprint 時間換算禁止 / 明記なき数値閾値禁止 / 数値判定のルール ID 引用義務) は両ファイルで完全同一である必要がある。片方だけ変更せず、常に両方同期する。同期マーカー `ANTI-BIAS-SYNC: vN` を両ファイル末尾のコメントで管理し、変更時はマーカーを bump する
+- **Sprint 用語の SSoT は `planner.md` の「Sprint 用語の定義」セクション**: agent-core における「1 sprint = 1 atomic PR 相当の作業単位」という定義は planner.md が権威ソース。他の agent/skill MD は必要なら参照のみ行い、独自定義を書かない
 
 ## 旧ワークフローとの互換性
 

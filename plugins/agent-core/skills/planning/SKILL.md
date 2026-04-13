@@ -315,8 +315,8 @@ planner の返答から `STORY_PATH` を抽出する。
 
 単一メッセージで 2 つの Agent call を並列発行:
 
-1. Agent(`subagent_type: spec-reviewer`, prompt: `MODE: STORY\n\n story.md をレビューせよ: {STORY_PATH}\nKPI_PATH: {KPI_PATH}\nSPEC_PATH: {SPEC_PATH}\n\nspec-reviewer.md の Story Mode Rules に従え (STORY-1 〜 STORY-6)。`)
-2. Agent(`subagent_type: flow-reviewer`, prompt: `MODE: STORY\n\n story.md の依存 DAG をレビューせよ: {STORY_PATH}\nKPI_PATH: {KPI_PATH}\nSPEC_PATH: {SPEC_PATH}\n\nflow-reviewer.md の Story Mode Rules に従え (STORY-DAG-1 〜 STORY-DAG-5)。`)
+1. Agent(`subagent_type: spec-reviewer`, prompt: `MODE: STORY\n\n story.md をレビューせよ: {STORY_PATH}\nKPI_PATH: {KPI_PATH}\nSPEC_PATH: {SPEC_PATH}\n\nspec-reviewer.md の Story Mode Rules に従え (STORY-1 〜 STORY-6)。\n\n※ sprint は 1 PR 相当の作業単位であり時間枠ではない。sprint × 週 / sprint × 日 等の時間換算を根拠にした NEEDS_FIX は Anti-Bias 違反として自動却下される (詳細は spec-reviewer.md の Sprint セマンティクス防衛セクション参照)。`)
+2. Agent(`subagent_type: flow-reviewer`, prompt: `MODE: STORY\n\n story.md の依存 DAG をレビューせよ: {STORY_PATH}\nKPI_PATH: {KPI_PATH}\nSPEC_PATH: {SPEC_PATH}\n\nflow-reviewer.md の Story Mode Rules に従え (STORY-DAG-1 〜 STORY-DAG-5)。\n\n※ sprint は 1 PR 相当の作業単位であり時間枠ではない。sprint × 週 / sprint × 日 等の時間換算を根拠にした NEEDS_FIX は Anti-Bias 違反として自動却下される (詳細は flow-reviewer.md の Sprint セマンティクス防衛セクション参照)。`)
 
 **Step 2S-1-3 — 判定集約**:
 
