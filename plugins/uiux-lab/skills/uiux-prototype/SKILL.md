@@ -164,16 +164,21 @@ designer の成果物を受け取ったら Step 4 へ。
 
 **重要**: 各ラウンド `Agent(subagent_type=uiux-evaluator)` を**新規 fork**する。前ラウンドの evaluator instance は使い回さない（references/02 Principle 3「認知的別モード」）。
 
-### Step 4-pre: agent-browser sandbox 許可の確認
+### Step 4-pre: agent-browser sandbox 許可の確認（abort on deny、P0 #3）
 
-evaluator は `agent-browser` CLI を Bash 経由で呼び、全画面のスクショを撮って**画像として視覚評価する**。agent-browser は `~/.agent-browser` に socket を作るため、**sandbox が有効だとエラー**になる。初回実行時のみユーザーに確認：
+evaluator は `agent-browser` CLI を Bash 経由で呼び、全画面のスクショを撮って**画像として視覚評価する**。agent-browser は `~/.agent-browser` に socket を作るため、**sandbox が有効だとエラー**になる。
 
+決定論ゲート（`!` 構文で事前実行）:
+
+```bash
+!if ! agent-browser --help >/dev/null 2>&1; then
+  echo "ABORT: agent-browser が利用できません（sandbox 不許可 or 未インストール）"
+  echo "settings の allowWrite に /Users/$USER/.agent-browser/** を追加してください"
+  exit 1
+fi
 ```
-この run で視覚検証を有効化するため、agent-browser が ~/.agent-browser への書き込みを要します。
-設定で一時的に sandbox 許可を与えてください。それとも今回はテキスト解析のみで走らせますか？
-```
 
-許可が得られたら Step 4-main へ、不許可なら Text-Only Mode（従来の grep 評価のみ）にフォールバック。
+**Text-Only Mode は削除しました**。視覚評価無しの OK 判定は references/01 Root cause 4「視覚 feedback loop の欠如」を構造的に踏襲するため、不許可なら skill を abort し、設定修正を促す。逃げ道は塞ぐ。
 
 ### Step 4-main: evaluator spawn
 
@@ -199,22 +204,80 @@ iter-{N-1} 以前のファイルは絶対に Read するな。手元の ITER_DIR
 
 ---
 
-## Step 5 — 判定分岐
+## Step 5 — 判定分岐（Hard Threshold + 下限ラウンド、P0 #1 #2 #4）
 
-### OK 判定
+### Step 5-1: Hard Threshold 判定（決定論ゲート）
 
-- 全 Critical 軸 PASS
-- Confidence = HIGH or MEDIUM
-- Step 7 へ
+evaluator が書いた `.uiux-lab/{run-id}/iter-{N}/review.md` から複数の信号を機械抽出し、**一致検証 + Hard Threshold 判定**する。evaluator の self-report だけでなく Issues セクションの実カウントも取って突合する（Goodhart 対策）：
 
-### NEEDS_FIX 判定
+```bash
+!REVIEW=".uiux-lab/{run-id}/iter-{N}/review.md"
 
-- Fix Instructions を抽出
-- Step 6 へ
+# evaluator の self-report
+HARD_OK_SELFREPORT=$(grep -oE 'Hard_OK:\s*(YES|NO)' "$REVIEW" | head -1 | awk '{print $2}')
+CRITICAL_SELFREPORT=$(grep -oE 'Critical_count:\s*[0-9]+' "$REVIEW" | head -1 | awk '{print $2}')
+IMPORTANT_SELFREPORT=$(grep -oE 'Important_count:\s*[0-9]+' "$REVIEW" | head -1 | awk '{print $2}')
+VISUAL_STATUS=$(grep -oE 'Visual_Capture_status:\s*(PASSED|FAILED)' "$REVIEW" | head -1 | awk '{print $2}')
+STANCE_STATUS=$(grep -oE 'Aesthetic_Stance_declaration:\s*(PRESENT|MISSING)' "$REVIEW" | head -1 | awk '{print $2}')
 
-### 3 ラウンド目までの早期 OK は疑う
+# Issues セクションの実カウント
+CRITICAL_ACTUAL=$(grep -cE '^\s*[0-9]+\.\s*\*\*\[Critical\]\*\*' "$REVIEW")
+IMPORTANT_ACTUAL=$(grep -cE '^\s*[0-9]+\.\s*\*\*\[Important\]\*\*' "$REVIEW")
 
-evaluator が R1-R3 で OK を出したら、orchestrator は**セカンドオピニオン**として evaluator をもう 1 度 kill-spawn で召喚し、**独立に**判定を取る。2 回とも OK なら真の OK。片方が NEEDS_FIX なら NEEDS_FIX 扱い。
+# 一致検証 (Goodhart 対策)
+if [ "$CRITICAL_SELFREPORT" != "$CRITICAL_ACTUAL" ] || [ "$IMPORTANT_SELFREPORT" != "$IMPORTANT_ACTUAL" ]; then
+  echo "SELFREPORT_MISMATCH: evaluator の数値宣言と Issues カウントが不一致 → 自動 NEEDS_FIX"
+  HARD_OK=0
+elif [ "$HARD_OK_SELFREPORT" = "YES" ] && [ "$CRITICAL_ACTUAL" -eq 0 ] && [ "$IMPORTANT_ACTUAL" -le 2 ] && [ "$VISUAL_STATUS" = "PASSED" ] && [ "$STANCE_STATUS" = "PRESENT" ]; then
+  HARD_OK=1
+else
+  HARD_OK=0
+fi
+
+echo "HARD_OK=$HARD_OK (C=$CRITICAL_ACTUAL, I=$IMPORTANT_ACTUAL, V=$VISUAL_STATUS, S=$STANCE_STATUS)"
+```
+
+- `HARD_OK=0` なら即 NEEDS_FIX 扱い → Step 6 へ
+- `HARD_OK=1` なら Step 5-2 へ
+
+### Step 5-2: 下限ラウンドゲート（MIN_ROUND=3）
+
+```bash
+!MIN_ROUND=3
+if [ "$HARD_OK" = "1" ] && [ "$ROUND" -lt "$MIN_ROUND" ]; then
+  echo "EARLY_OK_REJECTED: ROUND=$ROUND < MIN_ROUND=$MIN_ROUND"
+  echo "下限未満の OK は自動 NEEDS_FIX に書き換え"
+  FORCE_NEEDS_FIX=1
+else
+  FORCE_NEEDS_FIX=0
+fi
+```
+
+- `FORCE_NEEDS_FIX=1` なら Step 6 へ（designer に「評価が厳しすぎない可能性。Important 指摘を Critical に昇格する視点で見直して」と伝える）
+
+### Step 5-3: セカンドオピニオン強制発動（R1-R3 のみ）
+
+R1-R3 の HARD_OK=1 は**必ず 2 回目 evaluator を spawn** して独立判定：
+
+```bash
+!if [ "$HARD_OK" = "1" ] && [ "$ROUND" -le 3 ]; then
+  echo "SECOND_OPINION_REQUIRED=1"
+else
+  echo "SECOND_OPINION_REQUIRED=0"
+fi
+```
+
+- `SECOND_OPINION_REQUIRED=1` のとき、orchestrator は evaluator を**再度 kill-spawn**し、独立評価を受ける。結果を `.uiux-lab/{run-id}/iter-{N}/review-2nd.md` に Write
+- 2 回目も Hard Threshold を通過したら真の OK → Step 7
+- どちらか一方でも Hard Threshold 未通過なら NEEDS_FIX → Step 6
+
+### Step 5-4: 最終判定サマリ
+
+```
+ROUND=N, HARD_OK_1=?, (SECOND_OPINION=?, HARD_OK_2=?), FINAL=OK/NEEDS_FIX
+```
+
+全判定ログを `.uiux-lab/{run-id}/iter-{N}/judgment.log` に Write（後の plateau 分析用）。
 
 ---
 
@@ -310,10 +373,13 @@ designer の revise 完了後 Step 4 へ。
 - **前ラウンド review を evaluator に渡さない** — バイアス遮断
 - **references は毎ラウンド両 agent が Read し直す** — 記憶に頼らない
 - **全 iter-* を保全** — 上書き禁止
+- **MIN_ROUND=3 下限** — 3 ラウンド未満の OK は自動 NEEDS_FIX に書き換え（P0 #1）
 - **max 15 ラウンド** — 超過は HITL エスカレーション
+- **Hard Threshold 決定論ゲート** — `Critical==0 && Important<=2 && Visual_Capture_count>=1` を Bash で機械判定、LLM 判断を挟まない（P0 #4）
+- **セカンドオピニオン強制発動** — R1-R3 の Hard OK は必ず 2 回目 evaluator を kill-spawn、両方 OK でなければ NEEDS_FIX（P0 #2）
 - **出力は分割 HTML + styles.css + Tailwind CDN** — React/Vue 等フレームワーク禁止、Phase 2 で拡張
 - **Revise は cp -R + 差分 Edit** — ゼロ再生成禁止、触らないファイルは byte-identical
-- **evaluator は視覚確認必須** — Visual Capture Step を経ずに OK 判定は禁止（sandbox 不許可で agent-browser が使えない場合のみ Text-Only Mode にフォールバック可、ただし review.md 冒頭に `[Text-Only Mode]` を明記）
+- **Visual Capture 必須、Text-Only Mode 削除** — agent-browser が使えない環境では skill を abort、設定修正を促す（P0 #3）
 
 ---
 
