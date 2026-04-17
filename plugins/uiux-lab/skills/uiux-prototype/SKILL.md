@@ -219,6 +219,8 @@ CRITICAL_SELFREPORT=$(grep -oE 'Critical_count:\s*[0-9]+' "$REVIEW" | head -1 | 
 IMPORTANT_SELFREPORT=$(grep -oE 'Important_count:\s*[0-9]+' "$REVIEW" | head -1 | awk '{print $2}')
 VISUAL_STATUS=$(grep -oE 'Visual_Capture_status:\s*(PASSED|FAILED)' "$REVIEW" | head -1 | awk '{print $2}')
 STANCE_STATUS=$(grep -oE 'Aesthetic_Stance_declaration:\s*(PRESENT|MISSING)' "$REVIEW" | head -1 | awk '{print $2}')
+ORIGINALITY_STATUS=$(grep -oE 'Originality_status:\s*(PASSED|FAILED)' "$REVIEW" | head -1 | awk '{print $2}')
+NAV_REDUNDANCY_STATUS=$(grep -oE 'Nav_Redundancy_status:\s*(PASSED|FAILED)' "$REVIEW" | head -1 | awk '{print $2}')
 
 # Issues セクションの実カウント
 CRITICAL_ACTUAL=$(grep -cE '^\s*[0-9]+\.\s*\*\*\[Critical\]\*\*' "$REVIEW")
@@ -228,13 +230,19 @@ IMPORTANT_ACTUAL=$(grep -cE '^\s*[0-9]+\.\s*\*\*\[Important\]\*\*' "$REVIEW")
 if [ "$CRITICAL_SELFREPORT" != "$CRITICAL_ACTUAL" ] || [ "$IMPORTANT_SELFREPORT" != "$IMPORTANT_ACTUAL" ]; then
   echo "SELFREPORT_MISMATCH: evaluator の数値宣言と Issues カウントが不一致 → 自動 NEEDS_FIX"
   HARD_OK=0
-elif [ "$HARD_OK_SELFREPORT" = "YES" ] && [ "$CRITICAL_ACTUAL" -eq 0 ] && [ "$IMPORTANT_ACTUAL" -le 2 ] && [ "$VISUAL_STATUS" = "PASSED" ] && [ "$STANCE_STATUS" = "PRESENT" ]; then
+elif [ "$HARD_OK_SELFREPORT" = "YES" ] \
+  && [ "$CRITICAL_ACTUAL" -eq 0 ] \
+  && [ "$IMPORTANT_ACTUAL" -le 2 ] \
+  && [ "$VISUAL_STATUS" = "PASSED" ] \
+  && [ "$STANCE_STATUS" = "PRESENT" ] \
+  && [ "$ORIGINALITY_STATUS" = "PASSED" ] \
+  && [ "$NAV_REDUNDANCY_STATUS" = "PASSED" ]; then
   HARD_OK=1
 else
   HARD_OK=0
 fi
 
-echo "HARD_OK=$HARD_OK (C=$CRITICAL_ACTUAL, I=$IMPORTANT_ACTUAL, V=$VISUAL_STATUS, S=$STANCE_STATUS)"
+echo "HARD_OK=$HARD_OK (C=$CRITICAL_ACTUAL, I=$IMPORTANT_ACTUAL, V=$VISUAL_STATUS, S=$STANCE_STATUS, O=$ORIGINALITY_STATUS, N=$NAV_REDUNDANCY_STATUS)"
 ```
 
 - `HARD_OK=0` なら即 NEEDS_FIX 扱い → Step 6 へ
@@ -271,13 +279,72 @@ fi
 - 2 回目も Hard Threshold を通過したら真の OK → Step 7
 - どちらか一方でも Hard Threshold 未通過なら NEEDS_FIX → Step 6
 
-### Step 5-4: 最終判定サマリ
+### Step 5-4: Regression Detection（P1-C、ROUND >= 2 のみ）
+
+Hard OK 1 回目＋2 回目が通過しても、**iter-1 と比較して機能的に退化している可能性**がある（今回発見された「iter-3 が iter-1 より微妙に悪化」問題の対処）。Evaluator は絶対評価のみで iter 間比較を禁じているため、**orchestrator（main Claude）が比較層を担う**。
+
+```bash
+!RUN_DIR=$(dirname "$ITER_DIR")
+ITER1_SS="$RUN_DIR/iter-1/screenshots"
+CUR_SS="$ITER_DIR/screenshots"
+
+if [ "$ROUND" -eq 1 ]; then
+  echo "REGRESSION_CHECK=SKIPPED (no baseline)"
+  REGRESSION_OK=1
+else
+  echo "REGRESSION_CHECK=REQUIRED"
+  # 比較対象ペアを列挙
+  for F in "$ITER1_SS"/*.png; do
+    NAME=$(basename "$F")
+    if [ -f "$CUR_SS/$NAME" ]; then
+      echo "PAIR: $F <=> $CUR_SS/$NAME"
+    else
+      echo "MISSING in current: $NAME"
+    fi
+  done
+fi
+```
+
+`REGRESSION_CHECK=REQUIRED` の場合、**orchestrator は**以下を実行する：
+
+1. 列挙された各ペアについて、両 PNG を Read ツールで**画像として読み込む**（Claude は画像を見られる）
+2. brief.md を Read で確認し、**brief の核心要件**（例: 「5 秒で把握」「片手操作」「複雑さを隠す」等）を抽出
+3. 各ペアについて以下を判定:
+   - **brief の核心要件が iter-1 より iter-N で弱まっていないか**（例: 数字の可読性、CTA の明瞭さ、視線誘導の強さ）
+   - **Aesthetic Stance の本質（visual thesis）が iter-1 より iter-N で希釈していないか**（例: "駅時刻表" の硬質さが柔らかくなっていないか）
+4. 退行を検出した場合:
+   - `$ITER_DIR/regression-report.md` に画面ごとの退行点を具体的に記述（iter-1 vs iter-N の差分、なぜ退行か）
+   - `REGRESSION_OK=0` として Step 5-5 で FINAL=NEEDS_FIX に書き換え
+5. 退行が無ければ `REGRESSION_OK=1`
+
+**判定の原則**:
+- 「craft が深化した（細部の作り込みが増えた）」≠「退行が無い」
+- 「brief の核心が薄まった」「iter-1 の突き抜け感が丸くなった」は退行
+- references/01 Root cause 5「safe-choice 報酬ハック」の視覚的症状も退行扱い
+
+### Step 5-5: 最終判定サマリ
 
 ```
-ROUND=N, HARD_OK_1=?, (SECOND_OPINION=?, HARD_OK_2=?), FINAL=OK/NEEDS_FIX
+ROUND=N
+HARD_OK_1=? (Critical=?, Important=?, ...)
+MIN_ROUND_CHECK=PASS/FAIL
+SECOND_OPINION_SPAWN=executed/skipped
+HARD_OK_2=? (if second opinion)
+REGRESSION_CHECK=SKIPPED/PASSED/FAILED (if failed, see regression-report.md)
+FINAL=OK/NEEDS_FIX
 ```
 
-全判定ログを `.uiux-lab/{run-id}/iter-{N}/judgment.log` に Write（後の plateau 分析用）。
+全判定ログを `.uiux-lab/{run-id}/iter-{N}/judgment.log` に Write。FINAL の確定条件は**全ゲート通過**：
+
+```
+FINAL = OK iff:
+  HARD_OK_1 == 1
+  && MIN_ROUND_CHECK == PASS
+  && (SECOND_OPINION_REQUIRED == 0 || HARD_OK_2 == 1)
+  && REGRESSION_OK == 1
+```
+
+一つでも欠ければ FINAL = NEEDS_FIX → Step 6 へ。
 
 ---
 
@@ -375,8 +442,9 @@ designer の revise 完了後 Step 4 へ。
 - **全 iter-* を保全** — 上書き禁止
 - **MIN_ROUND=3 下限** — 3 ラウンド未満の OK は自動 NEEDS_FIX に書き換え（P0 #1）
 - **max 15 ラウンド** — 超過は HITL エスカレーション
-- **Hard Threshold 決定論ゲート** — `Critical==0 && Important<=2 && Visual_Capture_count>=1` を Bash で機械判定、LLM 判断を挟まない（P0 #4）
+- **Hard Threshold 決定論ゲート** — `Critical==0 && Important<=2 && Visual==PASSED && Stance==PRESENT && Originality==PASSED && NavRedundancy==PASSED` を Bash で機械判定、LLM 判断を挟まない（P0 #4、P1-D で拡張）
 - **セカンドオピニオン強制発動** — R1-R3 の Hard OK は必ず 2 回目 evaluator を kill-spawn、両方 OK でなければ NEEDS_FIX（P0 #2）
+- **iter-1 退行検知** — ROUND>=2 の FINAL=OK 候補は orchestrator が iter-1 と視覚比較、brief 核心の退行があれば NEEDS_FIX に書き換え（P1-C）
 - **出力は分割 HTML + styles.css + Tailwind CDN** — React/Vue 等フレームワーク禁止、Phase 2 で拡張
 - **Revise は cp -R + 差分 Edit** — ゼロ再生成禁止、触らないファイルは byte-identical
 - **Visual Capture 必須、Text-Only Mode 削除** — agent-browser が使えない環境では skill を abort、設定修正を促す（P0 #3）

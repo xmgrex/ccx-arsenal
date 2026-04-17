@@ -121,7 +121,7 @@
     {
       "name": "uiux-lab",
       "description": "UI/UX prototyping lab. Hearing → brief → prototype → evaluation loop with kill-spawn bias isolation. References 4 first-principle research articles.",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "author": {
         "name": "kyouyagenki"
       },

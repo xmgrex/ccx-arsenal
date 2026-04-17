@@ -149,6 +149,52 @@ fi
 - `ls $ITER_DIR/screens/` の結果と突合
 - 各 screens/*.html を Read して `<a href>` の遷移先を抽出、エッジと照合
 
+#### 2-b. Navigation Redundancy 検出（Critical、旦那様の指摘 #3）
+
+**同じ遷移先を指すリンクが同一画面内で複数存在するのは zombie UI**。上部 global nav と下部 footer が**同じリンクセット**を並べている等は、ユーザーに「違いがあるはず」と探させて認知負荷を上げる。
+
+機械検証:
+
+```bash
+# 各 HTML 内で同じ href が 2 回以上出現するか
+for F in $(find "$ITER_DIR" -maxdepth 2 -name '*.html'); do
+  echo "=== $F ==="
+  grep -oE 'href="[^"#][^"]*"' "$F" | sort | uniq -c | awk '$1 > 1 {print}'
+done
+```
+
+判定:
+- 同一画面内で同じ `href` が 2 回以上出現し、かつ**片方の近傍 HTML コメントに justify が無い** → **Critical NEEDS_FIX**
+- justify の例: `<!-- 下部ナビ: 上部 global nav と重複するが、長スクロール画面での再到達用。footer 的 utility として意図的配置 -->`
+- justify が無ければ**片方を削除**するか、役割を差別化する（上 = global、下 = "次のおすすめ 1 つだけ" or footer legal）
+
+#### 2-c. Phantom CTA 検出（Important）
+
+画面内で同じラベル（「次へ」「Back」「詳細」等）の CTA が**異なる遷移先**を指している場合、ユーザーが裏切られる：
+
+```bash
+# 同一画面内で同じテキストのリンクが異なる href を持つケース
+for F in $(find "$ITER_DIR" -maxdepth 2 -name '*.html'); do
+  grep -oE '<a[^>]*href="[^"]+"[^>]*>[^<]+</a>' "$F" \
+    | sed -E 's|.*href="([^"]+)"[^>]*>([^<]+)</a>|\2|||\1|' \
+    | sort | uniq -c | sort | awk '$1 == 1' || true
+done
+```
+(手動で `grep -oE` + 目視でも OK)
+
+#### 2-d. Placeholder 残存 / Dead Element 検出（Important）
+
+```bash
+# プレースホルダ残骸
+grep -rnE '(Lorem ipsum|lorem|TODO|TBD|FIXME|XXX|placeholder text|dummy)' "$ITER_DIR" --include='*.html'
+
+# 空の <a> や onclick なし <button>
+grep -rnE '<a[^>]*href=""' "$ITER_DIR" --include='*.html'
+grep -rnE '<button[^>]*>[^<]+</button>' "$ITER_DIR" --include='*.html' | grep -vE 'onclick|type="submit"|form='
+```
+
+検出されたら Important NEEDS_FIX。プレースホルダは未完成の証拠、dead button/link は機能の嘘。
+
 ### 3. Whitespace / Ma（Critical、旦那様の不満点 #2）
 
 **視覚評価必須** — スクショを見ずにクラス名から推測で判定するな。references/00 Principle 3（余白 = 意図のコスト・シグナル）を基準に：
@@ -210,6 +256,42 @@ grid 崩れ・整列ズレは目視で一発で分かる。スクショを見て
 - brief.md の 1 文で述べられた **mood/energy** が、Aesthetic Stance と整合するか
 - flow.md の全画面が HTML に存在するか
 - 1 文に無い機能を勝手に足していないか（scope creep）
+
+### 9. Originality（Critical、P1-D 追加）
+
+AI-Slop Prohibition が**「ダサくないか」のネガティブチェック**であるのに対し、Originality は**「見たことがないか」のポジティブチェック**。Anthropic 記事の Design Quality / Originality / Craft 重み設計のうち、Originality を Critical 化する。references/01 Root cause 5「safe-choice 報酬ハック」対策でもある。
+
+**PASSED 判定の条件（全て満たす必要あり）**:
+
+1. **Aesthetic Stance の実装反映** — Visual thesis / Accent / Interaction thesis 3 点宣言が**単なるコメントではなく HTML/CSS に実装として現れている**か
+   - Visual thesis に「駅時刻表」「90s ドイツ工業」等のキーワードがあるなら、typography scale / hairline rule / monospace number 等の**具体的実装要素**を grep で検出
+   - Accent が OKLCH で 5 shades 導出されている（`oklch(` が styles.css に 5 個以上）
+   - Interaction thesis が 2-3 個の具体的な transition/animation として実装されている（grep で確認）
+
+2. **Typical SaaS dashboard との視覚的差別化** — スクショを見て「2024 年の Notion / Linear / Asana / Stripe Dashboard に見えないか」を判定
+   - `rounded-xl shadow` + `grid-cols-3` + `bg-white border` の**カード × 3 カラム構成が dominant なら FAILED**
+   - hero / primary view が**記号的な一文字や数字の極端な拡大**（120px+）等で **brief の 1 語を視覚化**していれば PASSED 傾向
+
+3. **Anti-reference の回避確認** — brief.md の "Anti-references" 節に挙がった参照を視覚的に再現していないか
+
+**判定の腹**: 「この UI を 10 秒ブラウザで見せたら、ブランド名なしで**どんなカテゴリのアプリか当てさせたら外す人が多いか**」が成立しない Pure な AI 生成 UI は FAILED。brief が家計アプリでも、見た目が「駅時刻表」「博物館展示」「日記帳」等に分類される方に傾くのが**Originality PASSED の基準**。
+
+検出方法:
+```bash
+# Visual thesis のキーワード抽出
+THESIS=$(grep -oE 'Visual thesis:[^-]+' "$ITER_DIR/index.html" | head -1)
+echo "THESIS=$THESIS"
+
+# OKLCH 宣言数
+OKLCH_COUNT=$(grep -oE 'oklch\(' "$ITER_DIR/styles.css" | wc -l)
+echo "OKLCH_COUNT=$OKLCH_COUNT (should be >=5 for 5-shade scale)"
+
+# transition / animation 実装数
+TRANSITION_COUNT=$(grep -cE '(transition|animation):\s*[^;]+;' "$ITER_DIR/styles.css")
+echo "TRANSITION_COUNT=$TRANSITION_COUNT"
+```
+
+その後スクショを精査し、上記 3 点を人間的判断で総合評価。
 
 ---
 
@@ -294,8 +376,10 @@ Important_count: M
 Minor_count: K
 Visual_Capture_status: PASSED / FAILED
 Aesthetic_Stance_declaration: PRESENT / MISSING
+Originality_status: PASSED / FAILED
+Nav_Redundancy_status: PASSED / FAILED
 
-Hard_OK_condition: (Critical_count == 0) && (Important_count <= 2) && (Visual_Capture_status == PASSED) && (Aesthetic_Stance_declaration == PRESENT)
+Hard_OK_condition: (Critical_count == 0) && (Important_count <= 2) && (Visual_Capture_status == PASSED) && (Aesthetic_Stance_declaration == PRESENT) && (Originality_status == PASSED) && (Nav_Redundancy_status == PASSED)
 Hard_OK: YES / NO
 ```
 
