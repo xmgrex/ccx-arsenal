@@ -1,0 +1,7 @@
+{
+  "name": "uiux-lab",
+  "description": "UI/UX プロトタイピング実験場。ヒアリング→要件定義→プロトタイプ→評価ループを kill-spawn バイアス遮断で回す minimal harness",
+  "author": {
+    "name": "kyouyagenki"
+  }
+}

@@ -17,7 +17,12 @@
       },
       "source": "./plugins/claude-md-auditor",
       "category": "development",
-      "keywords": ["claude-md", "audit", "best-practices", "optimization"]
+      "keywords": [
+        "claude-md",
+        "audit",
+        "best-practices",
+        "optimization"
+      ]
     },
     {
       "name": "pdca-debug-suite",
@@ -28,7 +33,16 @@
       },
       "source": "./plugins/pdca-debug-suite",
       "category": "development",
-      "keywords": ["pdca", "debugging", "logging", "mobile", "flutter", "android", "ios", "mcp"]
+      "keywords": [
+        "pdca",
+        "debugging",
+        "logging",
+        "mobile",
+        "flutter",
+        "android",
+        "ios",
+        "mcp"
+      ]
     },
     {
       "name": "flutter-riverpod-architecture",
@@ -39,7 +53,13 @@
       },
       "source": "./plugins/flutter-riverpod-architecture",
       "category": "development",
-      "keywords": ["flutter", "riverpod", "clean-architecture", "freezed", "go_router"]
+      "keywords": [
+        "flutter",
+        "riverpod",
+        "clean-architecture",
+        "freezed",
+        "go_router"
+      ]
     },
     {
       "name": "agent-core",
@@ -50,7 +70,17 @@
       },
       "source": "./plugins/agent-core",
       "category": "productivity",
-      "keywords": ["agent", "delegation", "intent", "skills", "orchestration", "meta", "tdd", "planning", "pr-review"]
+      "keywords": [
+        "agent",
+        "delegation",
+        "intent",
+        "skills",
+        "orchestration",
+        "meta",
+        "tdd",
+        "planning",
+        "pr-review"
+      ]
     },
     {
       "name": "flutter-guardian",
@@ -61,7 +91,14 @@
       },
       "source": "./plugins/flutter-guardian",
       "category": "development",
-      "keywords": ["flutter", "dart", "lint", "enn", "hooks", "guardian"]
+      "keywords": [
+        "flutter",
+        "dart",
+        "lint",
+        "enn",
+        "hooks",
+        "guardian"
+      ]
     },
     {
       "name": "swift-guardian",
@@ -72,7 +109,32 @@
       },
       "source": "./plugins/swift-guardian",
       "category": "development",
-      "keywords": ["swift", "swiftui", "xcode", "ios", "hooks", "guardian"]
+      "keywords": [
+        "swift",
+        "swiftui",
+        "xcode",
+        "ios",
+        "hooks",
+        "guardian"
+      ]
+    },
+    {
+      "name": "uiux-lab",
+      "description": "UI/UX prototyping lab. Hearing → brief → prototype → evaluation loop with kill-spawn bias isolation. References 4 first-principle research articles.",
+      "version": "0.1.0",
+      "author": {
+        "name": "kyouyagenki"
+      },
+      "source": "./plugins/uiux-lab",
+      "category": "development",
+      "keywords": [
+        "uiux",
+        "design",
+        "prototype",
+        "feedback-loop",
+        "kill-spawn",
+        "first-principles"
+      ]
     }
   ]
 }
