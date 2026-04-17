@@ -156,20 +156,34 @@ designer の成果物を受け取ったら Step 4 へ。
 
 ---
 
-## Step 4 — uiux-evaluator kill-spawn
+## Step 4 — uiux-evaluator kill-spawn（Visual-first）
 
 **重要**: 各ラウンド `Agent(subagent_type=uiux-evaluator)` を**新規 fork**する。前ラウンドの evaluator instance は使い回さない（references/02 Principle 3「認知的別モード」）。
+
+### Step 4-pre: agent-browser sandbox 許可の確認
+
+evaluator は `agent-browser` CLI を Bash 経由で呼び、全画面のスクショを撮って**画像として視覚評価する**。agent-browser は `~/.agent-browser` に socket を作るため、**sandbox が有効だとエラー**になる。初回実行時のみユーザーに確認：
+
+```
+この run で視覚検証を有効化するため、agent-browser が ~/.agent-browser への書き込みを要します。
+設定で一時的に sandbox 許可を与えてください。それとも今回はテキスト解析のみで走らせますか？
+```
+
+許可が得られたら Step 4-main へ、不許可なら Text-Only Mode（従来の grep 評価のみ）にフォールバック。
+
+### Step 4-main: evaluator spawn
 
 evaluator へのプロンプトは**最小限**：
 
 ```
-HTML_PATH: .uiux-lab/{run-id}/iter-{N}/index.html
-BRIEF_PATH: .uiux-lab/{run-id}/brief.md
-FLOW_PATH: .uiux-lab/{run-id}/flow.md
+HTML_PATH: [絶対パス].uiux-lab/{run-id}/iter-{N}/index.html
+BRIEF_PATH: [絶対パス].uiux-lab/{run-id}/brief.md
+FLOW_PATH: [絶対パス].uiux-lab/{run-id}/flow.md
+SCREENSHOTS_DIR: [絶対パス].uiux-lab/{run-id}/iter-{N}/screenshots/
 ROUND: N / 15
 
-references/* 全 4 本を Read し、HTML を機械検証 + 8 軸で評価し、OK / NEEDS_FIX を返せ。
-iter-{N-1} 以前のファイルは絶対に Read するな。手元の HTML のみを見ろ。
+references/* 全 4 本を Read し、Visual Capture Step（全 data-screen を agent-browser で撮影 → Read で画像読込）→ 機械検証 → 8 軸評価で OK / NEEDS_FIX を返せ。
+iter-{N-1} 以前のファイルは絶対に Read するな。手元の HTML とスクショのみを見ろ。
 ```
 
 **禁止**:
@@ -177,7 +191,7 @@ iter-{N-1} 以前のファイルは絶対に Read するな。手元の HTML の
 - 「前回より良くなったか」を問わない（絶対評価のみ）
 - 「designer の意図」を推測させない
 
-評価結果を `.uiux-lab/{run-id}/iter-{N}/review.md` に Write。
+評価結果を `.uiux-lab/{run-id}/iter-{N}/review.md` に Write。スクショは `.uiux-lab/{run-id}/iter-{N}/screenshots/*.png` に保全（全ラウンド履歴）。
 
 ---
 
@@ -259,10 +273,16 @@ designer の revise 完了後 Step 4 へ。
     ├── flow.md
     ├── iter-1/
     │   ├── index.html
-    │   └── review.md
+    │   ├── review.md
+    │   └── screenshots/
+    │       ├── home.png
+    │       ├── home-mobile.png     (モバイル brief のとき)
+    │       ├── detail.png
+    │       └── ...
     ├── iter-2/
     │   ├── index.html
-    │   └── review.md
+    │   ├── review.md
+    │   └── screenshots/
     └── iter-N/ ...
 ```
 
@@ -278,6 +298,7 @@ designer の revise 完了後 Step 4 へ。
 - **全 iter-* を保全** — 上書き禁止
 - **max 15 ラウンド** — 超過は HITL エスカレーション
 - **出力は単一 HTML + Tailwind CDN** — 最小構成、Phase 2 で拡張
+- **evaluator は視覚確認必須** — Visual Capture Step を経ずに OK 判定は禁止（sandbox 不許可で agent-browser が使えない場合のみ Text-Only Mode にフォールバック可、ただし review.md 冒頭に `[Text-Only Mode]` を明記）
 
 ---
 
